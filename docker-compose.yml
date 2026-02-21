@@ -1,0 +1,11 @@
+services:
+  transaction-evaluator:
+    build:
+      context: ./ms-transaction-evaluator
+    volumes:
+      - ./ms-transaction-evaluator:/app:cached
+      - /app/build
+    ports:
+      - "3000:3000"
+    environment:
+      - GO111MODULE=on

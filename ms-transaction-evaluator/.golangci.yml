@@ -1,0 +1,95 @@
+version: "2"
+
+run:
+  go: "1.25"
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - asasalint # Checks for passing []any as any in a variadic function signature (…any) which may obscure type safety.
+    - asciicheck # Verifies that code identifiers (names) do not contain non-ASCII symbols, to avoid confusion or encoding issues.
+    - bidichk # Detects dangerous Unicode directional characters (e.g., bidi control characters) which could hide malicious code or cause confusing behaviour.
+    - bodyclose # Ensures that HTTP response bodies (from net/http) are properly closed to avoid resource leaks.
+    - canonicalheader # Checks that net/http.Header keys use canonical form (e.g., 'Content-Type' not 'content-type') for proper HTTP behaviour.
+    - contextcheck # Detects functions using a non-inherited context (e.g., not passing or using context.Context properly) which may hamper cancellation/timeout propagation.
+    - copyloopvar # Finds cases where loop variables are captured by closures or copied wrongly in loops, leading to subtle bugs.
+    - cyclop # Computes cyclomatic complexity of functions and reports those that exceed a defined threshold, helping identify overly complex code.
+    - dogsled # Flags assignments with too many blank identifiers (e.g., `x, _, _, _, := f()`) which usually indicate code smell or unused values.
+    - dupl # Detects duplicate fragments of code (copy-paste or similar blocks) to encourage refactoring and reduce maintenance burden.
+    - durationcheck # Checks for suspicious use of two durations being multiplied (which often leads to incorrect time calculations) rather than added.
+    - errcheck # Checks for unchecked errors in Go code (calls returning error where the error is ignored) which can lead to silent failures.
+    - errchkjson # Specifically checks for misuse of JSON error checking (e.g., error handling when decoding/encoding JSON) to ensure the error is not ignored or mishandled.
+    - errname # Ensures that error variables follow naming conventions (e.g., ending with 'Err') and helps maintain consistent error naming.
+    - errorlint # Analyzes error usage patterns (wrapping, returning, comparing) to enforce correct idiomatic error handling in Go.
+    - exhaustive # Verifies that switch statements are exhaustive over enum-like constant sets (i.e., all known cases are handled) to avoid missing branches.
+    - fatcontext # Detects functions receiving large context objects (too many parameters) which may indicate high complexity or lack of separation of concerns.
+    - forbidigo # Enforces forbidding of certain packages/functions (according to policy) e.g., disallowing fmt.Printf in favour of a logging library, to enforce codebase conventions.
+    - forcetypeassert # Detects uses of type assertions (`.(T)`) that could be replaced with safer patterns (e.g., type switches) or checked for safety.
+    - funlen # Flags functions that are too long (in lines or statements) which often indicates need for refactoring into smaller units.
+    - gocheckcompilerdirectives # Verifies that Go compiler directive comments (//go:…) are valid and correctly positioned, to avoid build issues or misdirectives.
+    - gochecknoglobals # Checks for usage of global variables, which are often discouraged because they increase coupling and reduce testability.
+    - gocognit # Computes cognitive complexity of functions (how hard code is to understand) and reports ones that exceed a threshold, to improve readability and maintainability.
+    - goconst # Finds repeated literal values (strings or numbers) that could be replaced by constants, improving maintainability and reducing duplication.
+    - gocritic # A broad-spectrum linter providing diagnostics for bugs, performance issues and style problems, with many rules and customisation options.
+    - gomoddirectives # Checks use of `replace`, `exclude`, `retract` directives in go.mod to ensure module dependencies are managed correctly.
+    - gosec # Security-oriented linter: inspects Go source code for common security problems (e.g., SQL injection, unsafe usage) to improve code safety.
+    - govet # Runs the standard `go vet` analyzers (detecting suspicious constructs, mistakes in format strings etc.), forming a baseline of correctness checks.
+    - importas # Enforces consistent import aliasing across the codebase (e.g., forbidding undescriptive aliases), increasing clarity of imports.
+    - ineffassign # Detects assignments to existing variables that are never used (eff assignments), helping remove dead code and clarify intent.
+    - interfacebloat # Checks that interfaces don't have too many methods (i.e., bloat), which can indicate poor abstraction or coupling.
+    - lll # Flags lines that exceed a maximum length ('long line length'), promoting readability and consistent code formatting.
+    - makezero # Finds slice declarations with non-zero initial length (e.g., `make([]T, 0, cap)`) where `nil` or empty slice may be more idiomatic or efficient.
+    - misspell # Finds commonly misspelled English words in code (identifiers, comments) to improve clarity and reduce confusion.
+    - nakedret # Flags functions using naked returns when the function is longer than a threshold (naked returns can reduce clarity in large functions).
+    - nestif # Detects deeply nested `if` statements (e.g., too many levels) which can reduce readability and indicate complexity.
+    - nilerr # Finds code that returns `nil` as error but checks `err != nil` or similar mismatches which can lead to logic errors.
+    - nilnil # Detects functions that return `nil, nil` (or a valid value and nil error) where the pattern doesn't make sense — helps avoid ambiguous returns.
+    - noctx # Checks for functions that take context.Context but don't use it (or incorrect context usage) which can indicate misuse of the context package.
+    - nolintlint # Checks suspicious or misuse of `//nolint` comments (e.g., overuse or missing justification) to maintain code quality discipline.
+    - nosprintfhostport # Detects uses of `fmt.Sprintf` for host:port formatting rather than using net.JoinHostPort or similar safe APIs, reducing subtle bugs.
+    - paralleltest # Checks tests to ensure proper usage of `t.Parallel()` (or detects misuse) in Go test code for parallelism safety and correctness.
+    - predeclared # Detects uses of predeclared identifiers (e.g., `string`, `int`) as variable names or shadowing, which can cause confusion.
+    - promlinter # Linter oriented around Prometheus instrumentation usage patterns, checking for correct metric naming/usage (for code using Prometheus).
+    - reassign # Detects variable reassignments that may introduce bugs (shadowing, reuse where new variable would be clearer) to improve clarity.
+    - revive # A fast, highly configurable linter for Go, offering rules for style, complexity, best practices — often used in conjunction with or as alternative to golint.
+    - rowserrcheck # Checks database rows operations (e.g., `Rows`, `Close`, `Err`) to ensure proper error checking/closing when iterating DB rows.
+    - sqlclosecheck # Ensures that SQL resources (e.g., sql.Rows, sql.Stmt, pgx.Query) are closed properly after use to avoid resource leaks.
+    - staticcheck # A comprehensive suite of static analysis rules (from the staticcheck tool) covering bugs, performance issues, unused code, etc.
+    - tparallel # Specifically checks for inappropriate usage of `t.Parallel()` in tests (e.g., misuse in subtests) to ensure safe parallel testing.
+    - unconvert # Detects unnecessary type conversions (where conversion is redundant) to simplify code and reduce noise.
+    - unparam # Reports unused function parameters (parameters that are never referenced) to signal dead or legacy code.
+    - unused # Checks for unused constants, variables, functions, types in Go code, enabling removal of dead code and improving clarity.
+    - usestdlibvars # Detects places where custom variables/constants could instead use ones from Go's standard library (reducing duplication and improving clarity).
+    - usetesting # Reports uses of functions in testing package that have better replacements (e.g., `t.Fatal` vs `require` or other patterns) to improve test code quality.
+    - wastedassign # Finds assignment statements whose results are never used, indicating redundant code or logic errors.
+    - whitespace # Checks for unnecessary whitespace/newlines (at start/end of functions, if/for blocks, etc.) to maintain consistent formatting and style.
+
+  settings:
+    cyclop:
+      max-complexity: 25
+    dupl:
+      threshold: 150
+    exhaustive:
+      default-signifies-exhaustive: true
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    forbidigo:
+      forbid:
+        - pattern: ^(fmt\\.Print(|f|ln)|print|println)$
+        - pattern: ^syscall\.[^A-Z_]+$(# Using anything except constants from the syscall package is forbidden )?
+    funlen:
+      lines: 80
+      statements: 60
+    gocognit:
+      min-complexity: 20
+    nestif:
+      min-complexity: 4
+    usetesting:
+      os-setenv: true
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
