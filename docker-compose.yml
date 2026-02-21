@@ -5,7 +5,9 @@ services:
     volumes:
       - ./ms-transaction-evaluator:/app:cached
       - /app/build
+    env_file:
+      - .env
     ports:
-      - "3000:3000"
+      - "${EVALUATOR_APP_PORT}:${EVALUATOR_APP_PORT}"
     environment:
       - GO111MODULE=on
