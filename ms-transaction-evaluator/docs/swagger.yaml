@@ -1,0 +1,116 @@
+basePath: /
+definitions:
+  entity.Currency:
+    enum:
+    - USD
+    - COP
+    - EUR
+    type: string
+    x-enum-varnames:
+    - USD
+    - COP
+    - EUR
+  entity.CustomerInfo:
+    properties:
+      customer_id:
+        example: cust_123
+        type: string
+      email:
+        example: john@example.com
+        type: string
+      ip_address:
+        example: 192.168.1.1
+        type: string
+      name:
+        example: John Doe
+        type: string
+      phone:
+        example: "+1234567890"
+        type: string
+    type: object
+  entity.EvaluateTransactionRequest:
+    properties:
+      amount_in_cents:
+        example: 10000
+        type: integer
+      currency:
+        allOf:
+        - $ref: '#/definitions/entity.Currency'
+        example: USD
+      customer:
+        $ref: '#/definitions/entity.CustomerInfo'
+      payment_method:
+        allOf:
+        - $ref: '#/definitions/entity.PaymentMethod'
+        example: CARD
+    type: object
+  entity.PaymentMethod:
+    enum:
+    - CARD
+    - BANK_TRANSFER
+    - CRYPTO
+    type: string
+    x-enum-varnames:
+    - CARD
+    - BANK_TRANSFER
+    - CRYPTO
+  http.ErrorResponse:
+    properties:
+      details:
+        example: customer email is invalid
+        type: string
+      error:
+        example: Validation failed
+        type: string
+    type: object
+  http.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        example: Transaction validation successful
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+  description: API for evaluating transactions and detecting potential fraud
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Transaction Evaluator API
+  version: "1.0"
+paths:
+  /evaluate:
+    post:
+      consumes:
+      - application/json
+      description: Validates and evaluates a transaction request to detect potential
+        fraud
+      parameters:
+      - description: Transaction evaluation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.EvaluateTransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Transaction validation successful
+          schema:
+            $ref: '#/definitions/http.SuccessResponse'
+        "400":
+          description: Invalid request or validation failed
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Evaluate a transaction for fraud detection
+      tags:
+      - transactions
+schemes:
+- http
+- https
+swagger: "2.0"

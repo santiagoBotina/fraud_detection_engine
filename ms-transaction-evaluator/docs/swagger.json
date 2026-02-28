@@ -1,0 +1,169 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "API for evaluating transactions and detecting potential fraud",
+        "title": "Transaction Evaluator API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "email": "support@example.com"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/",
+    "paths": {
+        "/evaluate": {
+            "post": {
+                "description": "Validates and evaluates a transaction request to detect potential fraud",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Evaluate a transaction for fraud detection",
+                "parameters": [
+                    {
+                        "description": "Transaction evaluation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/entity.EvaluateTransactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Transaction validation successful",
+                        "schema": {
+                            "$ref": "#/definitions/http.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "entity.Currency": {
+            "type": "string",
+            "enum": [
+                "USD",
+                "COP",
+                "EUR"
+            ],
+            "x-enum-varnames": [
+                "USD",
+                "COP",
+                "EUR"
+            ]
+        },
+        "entity.CustomerInfo": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string",
+                    "example": "cust_123"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "ip_address": {
+                    "type": "string",
+                    "example": "192.168.1.1"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "John Doe"
+                },
+                "phone": {
+                    "type": "string",
+                    "example": "+1234567890"
+                }
+            }
+        },
+        "entity.EvaluateTransactionRequest": {
+            "type": "object",
+            "properties": {
+                "amount_in_cents": {
+                    "type": "integer",
+                    "example": 10000
+                },
+                "currency": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/entity.Currency"
+                        }
+                    ],
+                    "example": "USD"
+                },
+                "customer": {
+                    "$ref": "#/definitions/entity.CustomerInfo"
+                },
+                "payment_method": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/entity.PaymentMethod"
+                        }
+                    ],
+                    "example": "CARD"
+                }
+            }
+        },
+        "entity.PaymentMethod": {
+            "type": "string",
+            "enum": [
+                "CARD",
+                "BANK_TRANSFER",
+                "CRYPTO"
+            ],
+            "x-enum-varnames": [
+                "CARD",
+                "BANK_TRANSFER",
+                "CRYPTO"
+            ]
+        },
+        "http.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "details": {
+                    "type": "string",
+                    "example": "customer email is invalid"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "Validation failed"
+                }
+            }
+        },
+        "http.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string",
+                    "example": "Transaction validation successful"
+                }
+            }
+        }
+    }
+}
