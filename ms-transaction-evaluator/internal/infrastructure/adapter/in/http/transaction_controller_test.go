@@ -1,21 +1,31 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"ms-transaction-evaluator/internal/domain/entity"
 	"ms-transaction-evaluator/internal/domain/usecase"
 
 	"github.com/labstack/echo/v5"
 )
 
+type mockTransactionRepository struct{}
+
+func (m *mockTransactionRepository) Save(ctx context.Context, transaction *entity.TransactionEntity) error {
+	return nil
+}
+
 func TestTransactionController_EvaluateTransaction(t *testing.T) {
 	// Setup
 	validateUseCase := usecase.NewValidateCreateTransactionPayloadUseCase()
-	controller := NewTransactionController(validateUseCase)
+	mockRepo := &mockTransactionRepository{}
+	saveUseCase := usecase.NewSaveTransactionUseCase(mockRepo)
+	controller := NewTransactionController(validateUseCase, saveUseCase)
 	e := echo.New()
 
 	t.Run("should return 200 with valid transaction request", func(t *testing.T) {
@@ -51,8 +61,12 @@ func TestTransactionController_EvaluateTransaction(t *testing.T) {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		if response["message"] != "Transaction validation successful" {
+		if response["message"] != "Transaction saved successfully" {
 			t.Errorf("Expected success message, got: %v", response["message"])
+		}
+
+		if response["data"] == nil {
+			t.Errorf("Expected data in response, got nil")
 		}
 	})
 

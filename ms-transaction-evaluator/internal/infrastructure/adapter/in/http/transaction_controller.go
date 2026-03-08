@@ -11,11 +11,13 @@ import (
 
 type TransactionController struct {
 	validateUseCase *usecase.ValidateCreateTransactionPayloadUseCase
+	saveUseCase     *usecase.SaveTransactionUseCase
 }
 
-func NewTransactionController(validateUseCase *usecase.ValidateCreateTransactionPayloadUseCase) *TransactionController {
+func NewTransactionController(validateUseCase *usecase.ValidateCreateTransactionPayloadUseCase, saveUseCase *usecase.SaveTransactionUseCase) *TransactionController {
 	return &TransactionController{
 		validateUseCase: validateUseCase,
+		saveUseCase:     saveUseCase,
 	}
 }
 
@@ -34,24 +36,33 @@ func (tc *TransactionController) EvaluateTransaction(c *echo.Context) error {
 
 	// Bind the request body to the struct
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error":   "Invalid request body",
-			"details": err.Error(),
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Invalid request body",
+			Details: err.Error(),
 		})
 	}
 
 	// Validate the request
 	if err := tc.validateUseCase.Execute(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"error":   "Validation failed",
-			"details": err.Error(),
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Validation failed",
+			Details: err.Error(),
 		})
 	}
 
-	// If validation passes, return success (for now)
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "Transaction validation successful",
-		"data":    req,
+	// Save the transaction after validation succeeds
+	transaction, err := tc.saveUseCase.Execute(c.Request().Context(), &req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "Failed to save transaction",
+			Details: err.Error(),
+		})
+	}
+
+	// Return success with the saved transaction
+	return c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Transaction saved successfully",
+		Data:    transaction,
 	})
 }
 

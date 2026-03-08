@@ -3,6 +3,7 @@ package entity
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestEvaluateTransactionRequest_JSONMarshaling(t *testing.T) {
@@ -258,6 +259,9 @@ func TestPaymentMethod_JSONMarshaling(t *testing.T) {
 
 func TestTransactionEntity_JSONMarshaling(t *testing.T) {
 	t.Run("should marshal to JSON correctly", func(t *testing.T) {
+		createdAt := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)
+		updatedAt := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)
+
 		entity := TransactionEntity{
 			ID:                "txn_12345",
 			AmountInCents:     25000,
@@ -268,6 +272,8 @@ func TestTransactionEntity_JSONMarshaling(t *testing.T) {
 			CustomerEmail:     "carlos@example.com",
 			CustomerPhone:     "+573001234567",
 			CustomerIPAddress: "200.50.100.25",
+			CreatedAt:         createdAt,
+			UpdatedAt:         updatedAt,
 		}
 
 		jsonData, err := json.Marshal(entity)
@@ -275,7 +281,7 @@ func TestTransactionEntity_JSONMarshaling(t *testing.T) {
 			t.Fatalf("Failed to marshal transaction entity: %v", err)
 		}
 
-		expected := `{"id":"txn_12345","amount_in_cents":25000,"currency":"COP","payment_method":"CRYPTO","customer_id":"cust_abc","customer_name":"Carlos Rodriguez","customer_email":"carlos@example.com","customer_phone":"+573001234567","customer_ip_address":"200.50.100.25"}`
+		expected := `{"id":"txn_12345","amount_in_cents":25000,"currency":"COP","payment_method":"CRYPTO","customer_id":"cust_abc","customer_name":"Carlos Rodriguez","customer_email":"carlos@example.com","customer_phone":"+573001234567","customer_ip_address":"200.50.100.25","created_at":"2026-03-08T12:00:00Z","updated_at":"2026-03-08T12:00:00Z"}`
 		if string(jsonData) != expected {
 			t.Errorf("JSON marshaling failed.\nExpected: %s\nGot: %s", expected, string(jsonData))
 		}

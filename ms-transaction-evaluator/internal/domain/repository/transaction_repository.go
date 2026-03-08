@@ -1,7 +1,10 @@
 package repository
 
-import "ms-transaction-evaluator/internal/domain/entity"
+import (
+	"context"
+	"ms-transaction-evaluator/internal/domain/entity"
+)
 
 type TransactionRepository interface {
-	createTransaction() *entity.TransactionEntity
+	Save(ctx context.Context, transaction *entity.TransactionEntity) error
 }

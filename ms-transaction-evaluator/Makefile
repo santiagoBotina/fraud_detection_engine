@@ -23,17 +23,8 @@ install:
 test:
 	go test ./...
 
-migrate:
-	go run cmd/migrate/main.go
-
-generate-migration-ddl:
-	migrate create -ext sql -dir internal/infrastructure/adapter/out/postgres/migrations/ddl $(name)
-
-generate-migration-dml:
-	migrate create -ext sql -dir internal/infrastructure/adapter/out/postgres/migrations/dml $(name)
-
-run-migrations-ddl:
-	migrate -path internal/infrastructure/adapter/out/postgres/migrations/ddl -database "postgres://$(DB_WRITER_USER):$(DB_WRITER_PASSWORD)@$(DB_WRITER_HOST)/$(DB_DATABASE_NAME)?sslmode=disable" up
-
-run-migrations-dml:
-	migrate -path internal/infrastructure/adapter/out/postgres/migrations/dml -database "postgres://$(DB_WRITER_USER):$(DB_WRITER_PASSWORD)@$(DB_WRITER_HOST)/$(DB_DATABASE_NAME)?sslmode=disable" up
+list-records:
+	aws dynamodb scan \
+	  --table-name $(DYNAMO_DB_TRANSACTIONS_TABLE) \
+	  --endpoint-url $(DYNAMO_DB_ENDPOINT) \
+	  --region us-east-1

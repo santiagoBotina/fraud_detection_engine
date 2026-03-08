@@ -1,5 +1,7 @@
 package entity
 
+import "time"
+
 type EvaluateTransactionRequest struct {
 	AmountInCents int64         `json:"amount_in_cents" example:"10000"`
 	Currency      Currency      `json:"currency" example:"USD"`
@@ -41,4 +43,6 @@ type TransactionEntity struct {
 	CustomerEmail     string        `json:"customer_email"`
 	CustomerPhone     string        `json:"customer_phone"`
 	CustomerIPAddress string        `json:"customer_ip_address"`
+	CreatedAt         time.Time     `json:"created_at"`
+	UpdatedAt         time.Time     `json:"updated_at"`
 }

@@ -1,13 +1,58 @@
 services:
-  transaction-evaluator:
-    build:
-      context: ./ms-transaction-evaluator
-    volumes:
-      - ./ms-transaction-evaluator:/app:cached
-      - /app/build
-    env_file:
-      - .env
+  dynamodb:
+    container_name: ${DYNAMO_CONTAINER_NAME}
+    image: amazon/dynamodb-local
     ports:
-      - "${EVALUATOR_APP_PORT}:${EVALUATOR_APP_PORT}"
+      - "${DYNAMO_DB_PORT}:${DYNAMO_DB_PORT}"
+    command: -jar DynamoDBLocal.jar -inMemory -sharedDb
+    networks:
+      - local-network
+
+  zookeeper:
+    container_name: ${ZOOKEEPER_CONTAINER_NAME}
+    image: confluentinc/cp-zookeeper:7.5.0
     environment:
-      - GO111MODULE=on
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
+    networks:
+      - local-network
+
+  kafka:
+    container_name: ${KAFKA_CONTAINER_NAME}
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:${KAFKA_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_MESSAGE_MAX_BYTES: 2097152
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 2097152
+      KAFKA_FETCH_MAX_BYTES: 2097152
+    networks:
+      - local-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:${KAFKA_PORT}
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:${ZOOKEEPER_PORT}
+    ports:
+      - "${KAFKA_UI_PORT}:${KAFKA_UI_PORT}"
+    networks:
+      - local-network
+    depends_on:
+      - zookeeper
+      - kafka
+
+networks:
+  local-network:
+    driver: bridge
