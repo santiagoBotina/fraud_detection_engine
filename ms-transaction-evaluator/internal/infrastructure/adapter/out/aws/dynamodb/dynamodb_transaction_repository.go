@@ -34,6 +34,7 @@ type transactionItem struct {
 	CustomerEmail     string `dynamodbav:"customer_email"`
 	CustomerPhone     string `dynamodbav:"customer_phone"`
 	CustomerIPAddress string `dynamodbav:"customer_ip_address"`
+	Status  		  entity.TransactionStatus `dynamodbav:"status"`
 	CreatedAt         string `dynamodbav:"created_at"`
 	UpdatedAt         string `dynamodbav:"updated_at"`
 }
@@ -50,6 +51,7 @@ func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *e
 		CustomerEmail:     transaction.CustomerEmail,
 		CustomerPhone:     transaction.CustomerPhone,
 		CustomerIPAddress: transaction.CustomerIPAddress,
+		Status:            transaction.Status,
 		CreatedAt:         transaction.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:         transaction.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}

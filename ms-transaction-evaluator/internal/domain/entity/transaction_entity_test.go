@@ -272,6 +272,7 @@ func TestTransactionEntity_JSONMarshaling(t *testing.T) {
 			CustomerEmail:     "carlos@example.com",
 			CustomerPhone:     "+573001234567",
 			CustomerIPAddress: "200.50.100.25",
+			Status:            PENDING,
 			CreatedAt:         createdAt,
 			UpdatedAt:         updatedAt,
 		}
@@ -281,7 +282,7 @@ func TestTransactionEntity_JSONMarshaling(t *testing.T) {
 			t.Fatalf("Failed to marshal transaction entity: %v", err)
 		}
 
-		expected := `{"id":"txn_12345","amount_in_cents":25000,"currency":"COP","payment_method":"CRYPTO","customer_id":"cust_abc","customer_name":"Carlos Rodriguez","customer_email":"carlos@example.com","customer_phone":"+573001234567","customer_ip_address":"200.50.100.25","created_at":"2026-03-08T12:00:00Z","updated_at":"2026-03-08T12:00:00Z"}`
+		expected := `{"id":"txn_12345","amount_in_cents":25000,"currency":"COP","payment_method":"CRYPTO","customer_id":"cust_abc","customer_name":"Carlos Rodriguez","customer_email":"carlos@example.com","customer_phone":"+573001234567","customer_ip_address":"200.50.100.25","status":"PENDING","created_at":"2026-03-08T12:00:00Z","updated_at":"2026-03-08T12:00:00Z"}`
 		if string(jsonData) != expected {
 			t.Errorf("JSON marshaling failed.\nExpected: %s\nGot: %s", expected, string(jsonData))
 		}
@@ -395,6 +396,103 @@ func TestEvaluateTransactionRequest_AllPaymentMethodsAndCurrencies(t *testing.T)
 					t.Errorf("Expected payment method %s, got %s", method, unmarshaled.PaymentMethod)
 				}
 			}
+		}
+	})
+}
+
+func TestTransactionStatus_Constants(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   TransactionStatus
+		expected string
+	}{
+		{"PENDING constant", PENDING, "PENDING"},
+		{"APPROVED constant", APPROVED, "APPROVED"},
+		{"REJECTED constant", REJECTED, "REJECTED"},
+		{"FAILED constant", FAILED, "FAILED"},
+		{"CANCELLED constant", CANCELLED, "CANCELLED"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.status) != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, string(tt.status))
+			}
+		})
+	}
+}
+
+func TestTransactionStatus_JSONMarshaling(t *testing.T) {
+	t.Run("should marshal status to JSON string", func(t *testing.T) {
+		statuses := []TransactionStatus{PENDING, APPROVED, REJECTED, FAILED, CANCELLED}
+		expected := []string{`"PENDING"`, `"APPROVED"`, `"REJECTED"`, `"FAILED"`, `"CANCELLED"`}
+
+		for i, status := range statuses {
+			jsonData, err := json.Marshal(status)
+			if err != nil {
+				t.Fatalf("Failed to marshal status %s: %v", status, err)
+			}
+			if string(jsonData) != expected[i] {
+				t.Errorf("Expected %s, got %s", expected[i], string(jsonData))
+			}
+		}
+	})
+
+	t.Run("should unmarshal status from JSON string", func(t *testing.T) {
+		jsonStrings := []string{`"PENDING"`, `"APPROVED"`, `"REJECTED"`, `"FAILED"`, `"CANCELLED"`}
+		expected := []TransactionStatus{PENDING, APPROVED, REJECTED, FAILED, CANCELLED}
+
+		for i, jsonStr := range jsonStrings {
+			var status TransactionStatus
+			err := json.Unmarshal([]byte(jsonStr), &status)
+			if err != nil {
+				t.Fatalf("Failed to unmarshal status from %s: %v", jsonStr, err)
+			}
+			if status != expected[i] {
+				t.Errorf("Expected %s, got %s", expected[i], status)
+			}
+		}
+	})
+}
+
+func TestTransactionEntity_StatusField(t *testing.T) {
+	t.Run("should include status in JSON marshaling", func(t *testing.T) {
+		txn := TransactionEntity{
+			ID:     "txn_status_test",
+			Status: PENDING,
+		}
+
+		jsonData, err := json.Marshal(txn)
+		if err != nil {
+			t.Fatalf("Failed to marshal transaction: %v", err)
+		}
+
+		var unmarshaled map[string]interface{}
+		err = json.Unmarshal(jsonData, &unmarshaled)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal to map: %v", err)
+		}
+
+		status, ok := unmarshaled["status"]
+		if !ok {
+			t.Fatal("Expected 'status' field in JSON output")
+		}
+		if status != "PENDING" {
+			t.Errorf("Expected status PENDING, got %s", status)
+		}
+	})
+
+	t.Run("should unmarshal status from JSON", func(t *testing.T) {
+		jsonData := `{"id":"txn_1","status":"APPROVED"}`
+
+		var txn TransactionEntity
+		err := json.Unmarshal([]byte(jsonData), &txn)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal: %v", err)
+		}
+
+		if txn.Status != APPROVED {
+			t.Errorf("Expected status APPROVED, got %s", txn.Status)
 		}
 	})
 }

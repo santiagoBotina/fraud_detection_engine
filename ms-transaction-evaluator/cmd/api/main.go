@@ -7,7 +7,6 @@ import (
 	"ms-transaction-evaluator/internal/domain/usecase"
 	httpAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/in/http"
 	dynamodbAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/aws/dynamodb"
-	"net/http"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -50,12 +49,12 @@ func main() {
 	tableName := os.Getenv("DYNAMO_DB_TRANSACTIONS_TABLE")
 
 	if endpoint != "" {
-		log.Printf("✅ Using custom DynamoDB endpoint: %s", endpoint)
+		log.Printf("Using custom DynamoDB endpoint: %s", endpoint)
 		dynamoClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
 			o.BaseEndpoint = &endpoint
 		})
 	} else {
-		log.Printf("✅ Using default AWS DynamoDB endpoint")
+		log.Printf("Using default AWS DynamoDB endpoint")
 		dynamoClient = dynamodb.NewFromConfig(cfg)
 	}
 
@@ -76,10 +75,6 @@ func main() {
 
 	// Swagger UI
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
-
-	e.GET("/", func(c *echo.Context) error {
-		return c.String(http.StatusOK, "Hello, World!")
-	})
 
 	port := os.Getenv("EVALUATOR_APP_PORT")
 

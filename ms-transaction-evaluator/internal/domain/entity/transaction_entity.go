@@ -18,7 +18,6 @@ type CustomerInfo struct {
 }
 
 type Currency string
-
 const (
 	USD Currency = "USD"
 	COP Currency = "COP"
@@ -26,11 +25,19 @@ const (
 )
 
 type PaymentMethod string
-
 const (
 	CARD          PaymentMethod = "CARD"
 	BANK_TRANSFER PaymentMethod = "BANK_TRANSFER"
 	CRYPTO        PaymentMethod = "CRYPTO"
+)
+
+type TransactionStatus string
+const (
+	PENDING   TransactionStatus = "PENDING"
+	APPROVED  TransactionStatus = "APPROVED"
+	REJECTED  TransactionStatus = "REJECTED"
+	FAILED    TransactionStatus = "FAILED"
+	CANCELLED TransactionStatus = "CANCELLED"
 )
 
 type TransactionEntity struct {
@@ -43,6 +50,7 @@ type TransactionEntity struct {
 	CustomerEmail     string        `json:"customer_email"`
 	CustomerPhone     string        `json:"customer_phone"`
 	CustomerIPAddress string        `json:"customer_ip_address"`
+	Status            TransactionStatus `json:"status"`
 	CreatedAt         time.Time     `json:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`
 }

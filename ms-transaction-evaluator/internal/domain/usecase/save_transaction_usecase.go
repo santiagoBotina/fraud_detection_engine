@@ -41,6 +41,7 @@ func (uc *SaveTransactionUseCase) Execute(ctx context.Context, req *entity.Evalu
 		CustomerEmail:     req.CustomerInfo.Email,
 		CustomerPhone:     req.CustomerInfo.Phone,
 		CustomerIPAddress: req.CustomerInfo.IpAddress,
+		Status:            entity.PENDING,
 		CreatedAt:         time.Now().UTC(),
 		UpdatedAt:         time.Now().UTC(),
 	}

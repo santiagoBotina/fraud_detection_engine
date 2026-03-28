@@ -131,6 +131,9 @@ func TestSaveTransactionUseCase_Execute(t *testing.T) {
 					if result.CustomerIPAddress != tt.request.CustomerInfo.IpAddress {
 						t.Errorf("expected customer IP %s but got %s", tt.request.CustomerInfo.IpAddress, result.CustomerIPAddress)
 					}
+					if result.Status != entity.PENDING {
+						t.Errorf("expected status PENDING but got %s", result.Status)
+					}
 					if result.CreatedAt.IsZero() {
 						t.Errorf("expected CreatedAt to be set")
 					}
