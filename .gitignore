@@ -1,4 +1,5 @@
 /.idea
+/.kiro/specs
 
 dist/
 build/
