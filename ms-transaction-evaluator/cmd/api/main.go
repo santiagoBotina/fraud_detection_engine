@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	_ "ms-transaction-evaluator/docs"
 	"ms-transaction-evaluator/internal/domain/usecase"
 	httpAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/in/http"
 	dynamodbAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/aws/dynamodb"
+	kafkaAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/kafka"
 	"os"
 
+	"github.com/IBM/sarama"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
@@ -35,6 +38,10 @@ import (
 func main() {
 	godotenv.Load()
 
+	logger := slog.Default()
+
+	logger.Info("starting transaction evaluator")
+
 	// Initialize AWS SDK
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(getEnvOrDefault("AWS_REGION", "us-east-1")),
@@ -49,26 +56,41 @@ func main() {
 	tableName := os.Getenv("DYNAMO_DB_TRANSACTIONS_TABLE")
 
 	if endpoint != "" {
-		log.Printf("Using custom DynamoDB endpoint: %s", endpoint)
+		logger.Info("using custom DynamoDB endpoint", "endpoint", endpoint)
 		dynamoClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
 			o.BaseEndpoint = &endpoint
 		})
 	} else {
-		log.Printf("Using default AWS DynamoDB endpoint")
+		logger.Info("using default AWS DynamoDB endpoint")
 		dynamoClient = dynamodb.NewFromConfig(cfg)
 	}
 
-	transactionRepo := dynamodbAdapter.NewDynamoDBTransactionRepository(dynamoClient, tableName)
+	transactionRepo := dynamodbAdapter.NewDynamoDBTransactionRepository(dynamoClient, tableName, logger)
+	logger.Info("DynamoDB repository initialized", "table", tableName)
+
+	// Initialize Kafka producer
+	brokerAddress := getEnvOrDefault("KAFKA_BROKER_ADDRESS", "localhost:9092")
+	transactionTopic := getEnvOrDefault("KAFKA_TRANSACTION_PENDING_TOPIC", "transaction-pending")
+
+	logger.Info("connecting to Kafka broker", "broker", brokerAddress)
+	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
+	if err != nil {
+		log.Fatalf("failed to create Kafka producer: %v", err)
+	}
+	defer producer.Close()
+	logger.Info("Kafka producer connected", "broker", brokerAddress, "topic", transactionTopic)
+
+	eventPublisher := kafkaAdapter.NewSaramaTransactionPublisher(producer, transactionTopic, logger)
 
 	// Initialize use cases
 	validateUseCase := usecase.NewValidateCreateTransactionPayloadUseCase()
-	saveUseCase := usecase.NewSaveTransactionUseCase(transactionRepo)
+	saveUseCase := usecase.NewSaveTransactionUseCase(transactionRepo, eventPublisher)
 
 	e := echo.New()
 	e.Use(middleware.RequestLogger())
 
 	// Initialize controller
-	transactionController := httpAdapter.NewTransactionController(validateUseCase, saveUseCase)
+	transactionController := httpAdapter.NewTransactionController(validateUseCase, saveUseCase, logger)
 
 	// Register routes
 	transactionController.RegisterRoutes(e)

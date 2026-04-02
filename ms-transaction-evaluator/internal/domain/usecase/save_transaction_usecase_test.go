@@ -19,16 +19,29 @@ func (m *mockTransactionRepository) Save(ctx context.Context, transaction *entit
 	return nil
 }
 
+type mockEventPublisher struct {
+	publishFunc func(ctx context.Context, transaction *entity.TransactionEntity) error
+}
+
+func (m *mockEventPublisher) Publish(ctx context.Context, transaction *entity.TransactionEntity) error {
+	if m.publishFunc != nil {
+		return m.publishFunc(ctx, transaction)
+	}
+	return nil
+}
+
 func TestSaveTransactionUseCase_Execute(t *testing.T) {
 	tests := []struct {
-		name        string
-		request     *entity.EvaluateTransactionRequest
-		setupMock   func(*mockTransactionRepository)
-		expectError bool
-		errorMsg    string
+		name           string
+		request        *entity.EvaluateTransactionRequest
+		setupMock      func(*mockTransactionRepository)
+		setupPublisher func(*mockEventPublisher)
+		expectError    bool
+		errorMsg       string
+		checkSentinel  error
 	}{
 		{
-			name: "successful save",
+			name: "successful save and publish",
 			request: &entity.EvaluateTransactionRequest{
 				AmountInCents: 10000,
 				Currency:      entity.USD,
@@ -46,14 +59,16 @@ func TestSaveTransactionUseCase_Execute(t *testing.T) {
 					return nil
 				}
 			},
-			expectError: false,
+			setupPublisher: func(m *mockEventPublisher) {},
+			expectError:    false,
 		},
 		{
-			name:        "nil request",
-			request:     nil,
-			setupMock:   func(m *mockTransactionRepository) {},
-			expectError: true,
-			errorMsg:    "request is nil",
+			name:           "nil request",
+			request:        nil,
+			setupMock:      func(m *mockTransactionRepository) {},
+			setupPublisher: func(m *mockEventPublisher) {},
+			expectError:    true,
+			errorMsg:       "request is nil",
 		},
 		{
 			name: "repository save error",
@@ -74,8 +89,36 @@ func TestSaveTransactionUseCase_Execute(t *testing.T) {
 					return errors.New("database error")
 				}
 			},
-			expectError: true,
-			errorMsg:    "database error",
+			setupPublisher: func(m *mockEventPublisher) {},
+			expectError:    true,
+			errorMsg:       "database error",
+		},
+		{
+			name: "event publish failure wraps ErrEventPublishFailed",
+			request: &entity.EvaluateTransactionRequest{
+				AmountInCents: 5000,
+				Currency:      entity.EUR,
+				PaymentMethod: entity.BANK_TRANSFER,
+				CustomerInfo: entity.CustomerInfo{
+					CustomerID: "cust_456",
+					Name:       "Jane Doe",
+					Email:      "jane@example.com",
+					Phone:      "+0987654321",
+					IpAddress:  "10.0.0.1",
+				},
+			},
+			setupMock: func(m *mockTransactionRepository) {
+				m.saveFunc = func(ctx context.Context, transaction *entity.TransactionEntity) error {
+					return nil
+				}
+			},
+			setupPublisher: func(m *mockEventPublisher) {
+				m.publishFunc = func(ctx context.Context, transaction *entity.TransactionEntity) error {
+					return errors.New("kafka unavailable")
+				}
+			},
+			expectError:   true,
+			checkSentinel: ErrEventPublishFailed,
 		},
 	}
 
@@ -83,7 +126,9 @@ func TestSaveTransactionUseCase_Execute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := &mockTransactionRepository{}
 			tt.setupMock(mockRepo)
-			useCase := NewSaveTransactionUseCase(mockRepo)
+			mockPub := &mockEventPublisher{}
+			tt.setupPublisher(mockPub)
+			useCase := NewSaveTransactionUseCase(mockRepo, mockPub)
 
 			ctx := context.Background()
 			result, err := useCase.Execute(ctx, tt.request)
@@ -91,8 +136,13 @@ func TestSaveTransactionUseCase_Execute(t *testing.T) {
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error but got nil")
-				} else if tt.errorMsg != "" && err.Error() != tt.errorMsg {
-					t.Errorf("expected error message '%s' but got '%s'", tt.errorMsg, err.Error())
+				} else {
+					if tt.errorMsg != "" && err.Error() != tt.errorMsg {
+						t.Errorf("expected error message '%s' but got '%s'", tt.errorMsg, err.Error())
+					}
+					if tt.checkSentinel != nil && !errors.Is(err, tt.checkSentinel) {
+						t.Errorf("expected error to wrap %v, got: %v", tt.checkSentinel, err)
+					}
 				}
 				if result != nil {
 					t.Errorf("expected nil result but got %v", result)

@@ -2,7 +2,9 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
 	"ms-transaction-evaluator/internal/domain/entity"
 
@@ -15,12 +17,14 @@ import (
 type DynamoDBTransactionRepository struct {
 	client    *dynamodb.Client
 	tableName string
+	logger    *slog.Logger
 }
 
-func NewDynamoDBTransactionRepository(client *dynamodb.Client, tableName string) *DynamoDBTransactionRepository {
+func NewDynamoDBTransactionRepository(client *dynamodb.Client, tableName string, logger *slog.Logger) *DynamoDBTransactionRepository {
 	return &DynamoDBTransactionRepository{
 		client:    client,
 		tableName: tableName,
+		logger:    logger,
 	}
 }
 
@@ -40,6 +44,11 @@ type transactionItem struct {
 }
 
 func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *entity.TransactionEntity) error {
+	r.logger.Info("saving transaction to DynamoDB",
+		"transaction_id", transaction.ID,
+		"table", r.tableName,
+	)
+
 	// Convert entity to DynamoDB item
 	item := transactionItem{
 		ID:                transaction.ID,
@@ -58,6 +67,10 @@ func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *e
 
 	av, err := attributevalue.MarshalMap(item)
 	if err != nil {
+		r.logger.Error("failed to marshal transaction for DynamoDB",
+			"error", err,
+			"transaction_id", transaction.ID,
+		)
 		return fmt.Errorf("failed to marshal transaction: %w", err)
 	}
 
@@ -69,12 +82,26 @@ func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *e
 
 	if err != nil {
 		var ccf *types.ConditionalCheckFailedException
-		if err != nil && err.Error() != "" {
+		if errors.As(err, &ccf) {
+			r.logger.Warn("duplicate transaction",
+				"transaction_id", transaction.ID,
+				"table", r.tableName,
+			)
 			return fmt.Errorf("transaction with id %s already exists", transaction.ID)
 		}
-		_ = ccf
+
+		r.logger.Error("failed to save transaction to DynamoDB",
+			"error", err,
+			"transaction_id", transaction.ID,
+			"table", r.tableName,
+		)
 		return fmt.Errorf("failed to save transaction: %w", err)
 	}
+
+	r.logger.Info("transaction saved to DynamoDB",
+		"transaction_id", transaction.ID,
+		"table", r.tableName,
+	)
 
 	return nil
 }

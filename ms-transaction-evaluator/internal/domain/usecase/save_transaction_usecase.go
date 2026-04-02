@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"ms-transaction-evaluator/internal/domain/entity"
@@ -17,11 +18,13 @@ var (
 
 type SaveTransactionUseCase struct {
 	transactionRepo repository.TransactionRepository
+	eventPublisher  repository.TransactionEventPublisher
 }
 
-func NewSaveTransactionUseCase(transactionRepo repository.TransactionRepository) *SaveTransactionUseCase {
+func NewSaveTransactionUseCase(transactionRepo repository.TransactionRepository, eventPublisher repository.TransactionEventPublisher) *SaveTransactionUseCase {
 	return &SaveTransactionUseCase{
 		transactionRepo: transactionRepo,
+		eventPublisher:  eventPublisher,
 	}
 }
 
@@ -49,6 +52,11 @@ func (uc *SaveTransactionUseCase) Execute(ctx context.Context, req *entity.Evalu
 	// Save to repository
 	if err := uc.transactionRepo.Save(ctx, transaction); err != nil {
 		return nil, err
+	}
+
+	// Publish transaction event to Kafka
+	if err := uc.eventPublisher.Publish(ctx, transaction); err != nil {
+		return nil, fmt.Errorf("failed to publish transaction event: %w", ErrEventPublishFailed)
 	}
 
 	return transaction, nil

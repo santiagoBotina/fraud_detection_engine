@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,12 +21,19 @@ func (m *mockTransactionRepository) Save(ctx context.Context, transaction *entit
 	return nil
 }
 
+type mockEventPublisher struct{}
+
+func (m *mockEventPublisher) Publish(ctx context.Context, transaction *entity.TransactionEntity) error {
+	return nil
+}
+
 func TestTransactionController_EvaluateTransaction(t *testing.T) {
 	// Setup
 	validateUseCase := usecase.NewValidateCreateTransactionPayloadUseCase()
 	mockRepo := &mockTransactionRepository{}
-	saveUseCase := usecase.NewSaveTransactionUseCase(mockRepo)
-	controller := NewTransactionController(validateUseCase, saveUseCase)
+	mockPub := &mockEventPublisher{}
+	saveUseCase := usecase.NewSaveTransactionUseCase(mockRepo, mockPub)
+	controller := NewTransactionController(validateUseCase, saveUseCase, slog.Default())
 	e := echo.New()
 
 	t.Run("should return 200 with valid transaction request", func(t *testing.T) {
