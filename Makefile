@@ -138,3 +138,15 @@ create-fraud-score-topics:
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
 	  --partitions 1 \
 	  --replication-factor 1
+
+
+# === LOAD TESTING ===
+load-test:
+	K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
+	k6 run -o experimental-prometheus-rw scripts/load-test.js
+
+load-test-docker:
+	docker run --rm --network fraud_detection_engine_local-network \
+	  -v $(PWD)/scripts:/scripts \
+	  -e K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write \
+	  grafana/k6:latest run -o experimental-prometheus-rw /scripts/load-test.js
