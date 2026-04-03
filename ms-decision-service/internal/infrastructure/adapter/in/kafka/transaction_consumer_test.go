@@ -41,6 +41,19 @@ func (m *mockDecisionPublisher) Publish(ctx context.Context, result *entity.Deci
 	return nil
 }
 
+// --- Mock FraudScoreRequestPublisher ---
+
+type mockFraudScoreRequestPublisher struct {
+	publishFunc func(ctx context.Context, transaction *entity.TransactionMessage) error
+}
+
+func (m *mockFraudScoreRequestPublisher) Publish(ctx context.Context, transaction *entity.TransactionMessage) error {
+	if m.publishFunc != nil {
+		return m.publishFunc(ctx, transaction)
+	}
+	return nil
+}
+
 // --- Mock ConsumerGroupSession ---
 
 type mockConsumerGroupSession struct {
@@ -74,7 +87,7 @@ func (m *mockConsumerGroupClaim) Messages() <-chan *sarama.ConsumerMessage { ret
 // --- Helper ---
 
 func buildUseCase(ruleRepo repository.RuleRepository, publisher repository.DecisionPublisher) *usecase.EvaluateTransactionUseCase {
-	return usecase.NewEvaluateTransactionUseCase(ruleRepo, publisher)
+	return usecase.NewEvaluateTransactionUseCase(ruleRepo, publisher, &mockFraudScoreRequestPublisher{})
 }
 
 func validTransactionJSON() []byte {

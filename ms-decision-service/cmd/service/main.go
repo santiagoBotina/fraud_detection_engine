@@ -68,8 +68,14 @@ func main() {
 
 	decisionPublisher := kafkaOut.NewSaramaDecisionPublisher(producer, decisionTopic, logger)
 
-	// Use case
-	evaluateUC := usecase.NewEvaluateTransactionUseCase(ruleRepo, decisionPublisher)
+	// Fraud score request publisher
+	fraudScoreRequestTopic := getEnvOrDefault("KAFKA_FRAUD_SCORE_REQUEST_TOPIC", "FraudScore.Request")
+	fraudScorePublisher := kafkaOut.NewSaramaFraudScoreRequestPublisher(producer, fraudScoreRequestTopic, logger)
+	logger.Info().Str("topic", fraudScoreRequestTopic).Msg("fraud score request publisher initialized")
+
+	// Use cases
+	evaluateUC := usecase.NewEvaluateTransactionUseCase(ruleRepo, decisionPublisher, fraudScorePublisher)
+	evaluateFraudScoreUC := usecase.NewEvaluateFraudScoreUseCase(ruleRepo, decisionPublisher)
 
 	// Kafka consumer
 	consumerGroup := getEnvOrDefault("KAFKA_CONSUMER_GROUP", "decision-service-group")
@@ -91,6 +97,20 @@ func main() {
 
 	consumer := kafkaIn.NewTransactionConsumer(evaluateUC, logger)
 
+	// Fraud score consumer group
+	fraudScoreCalculatedTopic := getEnvOrDefault("KAFKA_FRAUD_SCORE_CALCULATED_TOPIC", "FraudScore.Calculated")
+	fraudScoreConsumerGroup := "fraud-score-consumer-group"
+
+	logger.Info().Str("group", fraudScoreConsumerGroup).Str("topic", fraudScoreCalculatedTopic).Msg("creating fraud score consumer group")
+	fsGroup, err := sarama.NewConsumerGroup([]string{brokerAddress}, fraudScoreConsumerGroup, saramaConfig)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to create fraud score consumer group")
+	}
+	defer fsGroup.Close()
+	logger.Info().Str("group", fraudScoreConsumerGroup).Str("broker", brokerAddress).Msg("fraud score consumer group connected")
+
+	fraudScoreConsumer := kafkaIn.NewFraudScoreConsumer(evaluateFraudScoreUC, logger)
+
 	// Graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -108,6 +128,19 @@ func main() {
 		Str("consumer_group", consumerGroup).
 		Str("topic", pendingTopic).
 		Msg("decision service started, consuming messages")
+
+	// Start fraud score consumer in a goroutine
+	go func() {
+		for {
+			if err := fsGroup.Consume(ctx, []string{fraudScoreCalculatedTopic}, fraudScoreConsumer); err != nil {
+				logger.Error().Err(err).Msg("fraud score consumer group error")
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			logger.Info().Msg("rebalancing fraud score consumer group")
+		}
+	}()
 
 	for {
 		if err := group.Consume(ctx, []string{pendingTopic}, consumer); err != nil {

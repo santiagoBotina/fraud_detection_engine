@@ -55,6 +55,38 @@ services:
       - zookeeper
       - kafka
 
+  redis:
+    container_name: redis_fraud_engine
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - local-network
+
+  ms-fraud-score:
+    container_name: ms_fraud_score
+    build:
+      context: ./ms-fraud-score
+      dockerfile: Dockerfile
+    environment:
+      KAFKA_BROKER_ADDRESS: kafka:29092
+      KAFKA_CONSUMER_GROUP: fraud-score-group
+      KAFKA_FRAUD_SCORE_REQUEST_TOPIC: FraudScore.Request
+      KAFKA_FRAUD_SCORE_CALCULATED_TOPIC: FraudScore.Calculated
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DYNAMO_DB_ENDPOINT: http://dynamodb:${DYNAMO_DB_PORT}
+      DYNAMO_DB_FRAUD_SCORES_TABLE: ddb-fraud-scores
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
+    depends_on:
+      - kafka
+      - redis
+      - dynamodb
+    networks:
+      - local-network
+
 networks:
   local-network:
     driver: bridge

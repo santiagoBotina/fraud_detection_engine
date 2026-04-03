@@ -11,6 +11,7 @@ const (
 	FieldPaymentMethod     ConditionField = "payment_method"
 	FieldCustomerID        ConditionField = "customer_id"
 	FieldCustomerIPAddress ConditionField = "customer_ip_address"
+	FieldFraudScore        ConditionField = "fraud_score"
 )
 
 // ConditionOperator represents a comparison operator used in rule evaluation.
@@ -50,7 +51,7 @@ type Rule struct {
 // For FieldAmountInCents, both values are parsed as int64 and compared numerically.
 // For all other fields, only EQUAL and NOT_EQUAL are supported (string comparison).
 func (op ConditionOperator) Compare(fieldValue, conditionValue string, field ConditionField) bool {
-	if field == FieldAmountInCents {
+	if field == FieldAmountInCents || field == FieldFraudScore {
 		return op.compareNumeric(fieldValue, conditionValue)
 	}
 

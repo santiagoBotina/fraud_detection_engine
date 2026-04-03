@@ -26,3 +26,10 @@ tmp
 
 # Go workspace file
 go.work
+
+### PYTHON ###
+
+# Venv
+.venv
+.pytest_cache
+.hypothesis
