@@ -6,16 +6,16 @@ interface StatusBadgeProps {
 
 const statusStyles: Record<string, React.CSSProperties> = {
   APPROVED: {
-    backgroundColor: "#a3d9a5",
-    color: "#1a5c2a",
+    backgroundColor: "var(--color-approved)",
+    color: "var(--color-approved-text)",
   },
   DECLINED: {
-    backgroundColor: "#f5a3a3",
-    color: "#7c1d1d",
+    backgroundColor: "var(--color-declined)",
+    color: "var(--color-declined-text)",
   },
   PENDING: {
-    backgroundColor: "#f5d89a",
-    color: "#6b4f10",
+    backgroundColor: "var(--color-pending)",
+    color: "var(--color-pending-text)",
   },
 };
 
@@ -30,15 +30,17 @@ const baseStyle: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
+const defaultColorStyle: React.CSSProperties = {
+  backgroundColor: "#d4d4dc",
+  color: "#4a4a5a",
+};
+
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  const colorStyle = statusStyles[status.toUpperCase()] ?? {
-    backgroundColor: "#d4d4dc",
-    color: "#4a4a5a",
-  };
+  const colorStyle = statusStyles[status.toUpperCase()] ?? defaultColorStyle;
 
   return (
     <span style={{ ...baseStyle, ...colorStyle }}>{status}</span>
   );
 };
 
-export default StatusBadge;
+export default React.memo(StatusBadge);

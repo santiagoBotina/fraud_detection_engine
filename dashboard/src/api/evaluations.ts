@@ -1,30 +1,9 @@
-export interface RuleEvaluationResult {
-  transaction_id: string;
-  rule_id: string;
-  rule_name: string;
-  condition_field: string;
-  condition_operator: string;
-  condition_value: string;
-  actual_field_value: string;
-  matched: boolean;
-  result_status: string;
-  evaluated_at: string;
-  priority: number;
-}
+import type { RuleEvaluationResult, Rule } from "../types";
+
+export type { RuleEvaluationResult, Rule };
 
 export interface EvaluationsResponse {
   data: RuleEvaluationResult[];
-}
-
-export interface Rule {
-  rule_id: string;
-  rule_name: string;
-  condition_field: string;
-  condition_operator: string;
-  condition_value: string;
-  result_status: string;
-  priority: number;
-  is_active: boolean;
 }
 
 export interface RulesResponse {

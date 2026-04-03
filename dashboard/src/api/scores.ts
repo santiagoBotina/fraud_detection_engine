@@ -1,8 +1,6 @@
-export interface FraudScore {
-  transaction_id: string;
-  fraud_score: number;
-  calculated_at: string;
-}
+import type { FraudScore } from "../types";
+
+export type { FraudScore };
 
 const BASE_URL = import.meta.env.VITE_FRAUD_SCORE_API_URL ?? "http://localhost:3002";
 

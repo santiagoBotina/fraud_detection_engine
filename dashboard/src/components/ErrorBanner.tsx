@@ -1,4 +1,5 @@
 import React from "react";
+import Button from "./ui/Button";
 
 interface ErrorBannerProps {
   message: string;
@@ -20,29 +21,13 @@ const bannerStyle: React.CSSProperties = {
   fontSize: "0.875rem",
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: "6px 16px",
-  backgroundColor: "var(--color-error-btn, #e06060)",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontWeight: 600,
-  fontSize: "0.8rem",
-  fontFamily: "'Inter', sans-serif",
-  whiteSpace: "nowrap",
-  transition: "background-color 150ms ease",
-};
+const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onRetry }) => (
+  <div role="alert" style={bannerStyle}>
+    <span>{message}</span>
+    <Button variant="error" onClick={onRetry}>
+      Retry
+    </Button>
+  </div>
+);
 
-const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onRetry }) => {
-  return (
-    <div role="alert" style={bannerStyle}>
-      <span>{message}</span>
-      <button style={buttonStyle} onClick={onRetry}>
-        Retry
-      </button>
-    </div>
-  );
-};
-
-export default ErrorBanner;
+export default React.memo(ErrorBanner);

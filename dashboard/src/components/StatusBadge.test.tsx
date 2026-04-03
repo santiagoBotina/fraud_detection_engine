@@ -3,25 +3,25 @@ import { render, screen } from "@testing-library/react";
 import StatusBadge from "./StatusBadge";
 
 describe("StatusBadge", () => {
-  it("renders APPROVED with green background", () => {
+  it("renders APPROVED with correct CSS variable", () => {
     render(<StatusBadge status="APPROVED" />);
     const badge = screen.getByText("APPROVED");
     expect(badge).toBeInTheDocument();
-    expect(badge.style.backgroundColor).toBe("rgb(163, 217, 165)");
+    expect(badge.style.backgroundColor).toBe("var(--color-approved)");
   });
 
-  it("renders DECLINED with red background", () => {
+  it("renders DECLINED with correct CSS variable", () => {
     render(<StatusBadge status="DECLINED" />);
     const badge = screen.getByText("DECLINED");
     expect(badge).toBeInTheDocument();
-    expect(badge.style.backgroundColor).toBe("rgb(245, 163, 163)");
+    expect(badge.style.backgroundColor).toBe("var(--color-declined)");
   });
 
-  it("renders PENDING with yellow background", () => {
+  it("renders PENDING with correct CSS variable", () => {
     render(<StatusBadge status="PENDING" />);
     const badge = screen.getByText("PENDING");
     expect(badge).toBeInTheDocument();
-    expect(badge.style.backgroundColor).toBe("rgb(245, 216, 154)");
+    expect(badge.style.backgroundColor).toBe("var(--color-pending)");
   });
 
   it("renders unknown status with gray background", () => {
@@ -29,5 +29,12 @@ describe("StatusBadge", () => {
     const badge = screen.getByText("UNKNOWN");
     expect(badge).toBeInTheDocument();
     expect(badge.style.backgroundColor).toBe("rgb(212, 212, 220)");
+  });
+
+  it("applies pill styling", () => {
+    render(<StatusBadge status="APPROVED" />);
+    const badge = screen.getByText("APPROVED");
+    expect(badge.style.borderRadius).toBe("9999px");
+    expect(badge.style.textTransform).toBe("uppercase");
   });
 });

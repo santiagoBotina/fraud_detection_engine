@@ -1,26 +1,8 @@
-export interface Transaction {
-  id: string;
-  amount_in_cents: number;
-  currency: string;
-  payment_method: string;
-  customer_id: string;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  customer_ip_address: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { Transaction, PaginatedResponse, SingleResponse } from "../types";
 
-export interface TransactionsResponse {
-  data: Transaction[];
-  next_cursor: string | null;
-}
-
-export interface TransactionResponse {
-  data: Transaction;
-}
+export type { Transaction };
+export type TransactionsResponse = PaginatedResponse<Transaction>;
+export type TransactionResponse = SingleResponse<Transaction>;
 
 const BASE_URL = import.meta.env.VITE_TRANSACTION_API_URL ?? "http://localhost:3000";
 
