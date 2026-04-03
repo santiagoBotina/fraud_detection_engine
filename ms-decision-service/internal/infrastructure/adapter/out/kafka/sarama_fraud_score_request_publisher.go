@@ -26,14 +26,35 @@ func NewSaramaFraudScoreRequestPublisher(
 	return &SaramaFraudScoreRequestPublisher{producer: producer, topic: topic, logger: logger}
 }
 
-// Publish marshals the transaction message to JSON and sends it to Kafka with retry.
+// fraudScoreRequest is the Kafka message schema expected by the fraud-score consumer.
+type fraudScoreRequest struct {
+	TransactionID     string `json:"transaction_id"`
+	AmountInCents     int64  `json:"amount_in_cents"`
+	Currency          string `json:"currency"`
+	PaymentMethod     string `json:"payment_method"`
+	CustomerID        string `json:"customer_id"`
+	CustomerIPAddress string `json:"customer_ip_address"`
+	Timestamp         string `json:"timestamp"`
+}
+
+// Publish maps the transaction to the FraudScoreRequest schema and sends it to Kafka with retry.
 func (p *SaramaFraudScoreRequestPublisher) Publish(_ context.Context, transaction *entity.TransactionMessage) error {
 	p.logger.Info().
 		Str("transaction_id", transaction.ID).
 		Str("topic", p.topic).
 		Msg("publishing fraud score request to Kafka")
 
-	payload, err := json.Marshal(transaction)
+	request := fraudScoreRequest{
+		TransactionID:     transaction.ID,
+		AmountInCents:     transaction.AmountInCents,
+		Currency:          transaction.Currency,
+		PaymentMethod:     transaction.PaymentMethod,
+		CustomerID:        transaction.CustomerID,
+		CustomerIPAddress: transaction.CustomerIPAddress,
+		Timestamp:         transaction.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	payload, err := json.Marshal(request)
 	if err != nil {
 		p.logger.Error().
 			Err(err).

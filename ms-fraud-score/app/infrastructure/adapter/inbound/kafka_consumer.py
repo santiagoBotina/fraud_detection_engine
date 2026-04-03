@@ -67,6 +67,13 @@ class FraudScoreRequestConsumer:
     def _handle_message(self, msg: Message) -> None:
         """Deserialize a single message and invoke the use case."""
         raw = msg.value()
+        logger.info(
+            "Message received on %s [partition=%s offset=%s key=%s]",
+            msg.topic(),
+            msg.partition(),
+            msg.offset(),
+            msg.key(),
+        )
         try:
             data = json.loads(raw)
             request = FraudScoreRequest.from_dict(data)
@@ -83,6 +90,10 @@ class FraudScoreRequestConsumer:
 
         try:
             self._use_case.execute(request)
+            logger.info(
+                "Successfully processed fraud score request for transaction %s",
+                request.transaction_id,
+            )
         except Exception:
             logger.exception(
                 "Failed to process message for transaction %s",

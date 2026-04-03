@@ -65,7 +65,7 @@ func (p *capturingSyncProducer) AddMessageToTxn(_ *sarama.ConsumerMessage, _ str
 func genTransactionEntity() gopter.Gen {
 	currencies := []entity.Currency{entity.USD, entity.COP, entity.EUR}
 	paymentMethods := []entity.PaymentMethod{entity.CARD, entity.BANK_TRANSFER, entity.CRYPTO}
-	statuses := []entity.TransactionStatus{entity.PENDING, entity.APPROVED, entity.REJECTED, entity.FAILED, entity.CANCELLED}
+	statuses := []entity.TransactionStatus{entity.PENDING, entity.APPROVED, entity.DECLINED}
 
 	return gopter.CombineGens(
 		gen.AlphaString().SuchThat(func(s string) bool { return len(s) > 0 }),

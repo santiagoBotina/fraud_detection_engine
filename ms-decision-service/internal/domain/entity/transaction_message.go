@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// TransactionMessage represents the JSON payload consumed from the transaction-pending Kafka topic.
+// TransactionMessage represents the JSON payload consumed from the Transaction.Created Kafka topic.
 type TransactionMessage struct {
 	ID                string    `json:"id"`
 	AmountInCents     int64     `json:"amount_in_cents"`

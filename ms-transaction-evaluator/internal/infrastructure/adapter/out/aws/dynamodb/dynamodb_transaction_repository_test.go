@@ -67,9 +67,7 @@ func TestTransactionItem_StatusMapping(t *testing.T) {
 		statuses := []entity.TransactionStatus{
 			entity.PENDING,
 			entity.APPROVED,
-			entity.REJECTED,
-			entity.FAILED,
-			entity.CANCELLED,
+			entity.DECLINED,
 		}
 
 		for _, s := range statuses {

@@ -33,3 +33,6 @@ go.work
 .venv
 .pytest_cache
 .hypothesis
+
+### Certificates ###
+combined-ca-bundle.pem

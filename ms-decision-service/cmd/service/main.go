@@ -15,6 +15,7 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -30,6 +31,11 @@ func main() {
 	// AWS SDK config
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(getEnvOrDefault("AWS_REGION", "us-east-1")),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			getEnvOrDefault("AWS_ACCESS_KEY_ID", "dummy"),
+			getEnvOrDefault("AWS_SECRET_ACCESS_KEY", "dummy"),
+			"",
+		)),
 	)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("unable to load AWS SDK config")
@@ -56,7 +62,7 @@ func main() {
 
 	// Kafka producer for decision results
 	brokerAddress := getEnvOrDefault("KAFKA_BROKER_ADDRESS", "localhost:9092")
-	decisionTopic := getEnvOrDefault("KAFKA_DECISION_RESULTS_TOPIC", "decision-results")
+	decisionTopic := getEnvOrDefault("KAFKA_DECISION_CALCULATED_TOPIC", "Decision.Calculated")
 
 	logger.Info().Str("broker", brokerAddress).Msg("connecting to Kafka broker")
 	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
@@ -79,7 +85,7 @@ func main() {
 
 	// Kafka consumer
 	consumerGroup := getEnvOrDefault("KAFKA_CONSUMER_GROUP", "decision-service-group")
-	pendingTopic := getEnvOrDefault("KAFKA_TRANSACTION_PENDING_TOPIC", "transaction-pending")
+	pendingTopic := getEnvOrDefault("KAFKA_TRANSACTION_CREATED_TOPIC", "Transaction.Created")
 
 	saramaConfig := sarama.NewConfig()
 	saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{

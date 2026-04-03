@@ -33,6 +33,12 @@ class KafkaScorePublisher(ScorePublisher):
                     value=value,
                 )
                 self._producer.flush()
+                logger.info(
+                    "Published score to %s for transaction %s (score=%d)",
+                    self._topic,
+                    result.transaction_id,
+                    result.fraud_score,
+                )
                 return
             except (KafkaException, BufferError) as exc:
                 last_error = exc

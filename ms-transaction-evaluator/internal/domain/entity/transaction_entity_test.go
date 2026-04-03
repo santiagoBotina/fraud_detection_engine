@@ -408,9 +408,7 @@ func TestTransactionStatus_Constants(t *testing.T) {
 	}{
 		{"PENDING constant", PENDING, "PENDING"},
 		{"APPROVED constant", APPROVED, "APPROVED"},
-		{"REJECTED constant", REJECTED, "REJECTED"},
-		{"FAILED constant", FAILED, "FAILED"},
-		{"CANCELLED constant", CANCELLED, "CANCELLED"},
+		{"DECLINED constant", DECLINED, "DECLINED"},
 	}
 
 	for _, tt := range tests {
@@ -424,8 +422,8 @@ func TestTransactionStatus_Constants(t *testing.T) {
 
 func TestTransactionStatus_JSONMarshaling(t *testing.T) {
 	t.Run("should marshal status to JSON string", func(t *testing.T) {
-		statuses := []TransactionStatus{PENDING, APPROVED, REJECTED, FAILED, CANCELLED}
-		expected := []string{`"PENDING"`, `"APPROVED"`, `"REJECTED"`, `"FAILED"`, `"CANCELLED"`}
+		statuses := []TransactionStatus{PENDING, APPROVED, DECLINED}
+		expected := []string{`"PENDING"`, `"APPROVED"`, `"DECLINED"`}
 
 		for i, status := range statuses {
 			jsonData, err := json.Marshal(status)
@@ -439,8 +437,8 @@ func TestTransactionStatus_JSONMarshaling(t *testing.T) {
 	})
 
 	t.Run("should unmarshal status from JSON string", func(t *testing.T) {
-		jsonStrings := []string{`"PENDING"`, `"APPROVED"`, `"REJECTED"`, `"FAILED"`, `"CANCELLED"`}
-		expected := []TransactionStatus{PENDING, APPROVED, REJECTED, FAILED, CANCELLED}
+		jsonStrings := []string{`"PENDING"`, `"APPROVED"`, `"DECLINED"`}
+		expected := []TransactionStatus{PENDING, APPROVED, DECLINED}
 
 		for i, jsonStr := range jsonStrings {
 			var status TransactionStatus

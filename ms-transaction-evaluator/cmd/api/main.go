@@ -6,13 +6,17 @@ import (
 	_ "ms-transaction-evaluator/docs"
 	"ms-transaction-evaluator/internal/domain/usecase"
 	httpAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/in/http"
+	kafkaIn "ms-transaction-evaluator/internal/infrastructure/adapter/in/kafka"
 	dynamodbAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/aws/dynamodb"
 	kafkaAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/kafka"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
@@ -62,6 +66,11 @@ func main() {
 	// Initialize AWS SDK
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(getEnvOrDefault("AWS_REGION", "us-east-1")),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			getEnvOrDefault("AWS_ACCESS_KEY_ID", "dummy"),
+			getEnvOrDefault("AWS_SECRET_ACCESS_KEY", "dummy"),
+			"",
+		)),
 	)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("unable to load AWS SDK config")
@@ -87,7 +96,7 @@ func main() {
 
 	// Initialize Kafka producer
 	brokerAddress := getEnvOrDefault("KAFKA_BROKER_ADDRESS", "localhost:9092")
-	transactionTopic := getEnvOrDefault("KAFKA_TRANSACTION_PENDING_TOPIC", "transaction-pending")
+	transactionTopic := getEnvOrDefault("KAFKA_TRANSACTION_CREATED_TOPIC", "Transaction.Created")
 
 	logger.Info().Str("broker", brokerAddress).Msg("connecting to Kafka broker")
 	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
@@ -102,6 +111,7 @@ func main() {
 	// Initialize use cases
 	validateUseCase := usecase.NewValidateCreateTransactionPayloadUseCase()
 	saveUseCase := usecase.NewSaveTransactionUseCase(transactionRepo, eventPublisher)
+	updateStatusUseCase := usecase.NewUpdateTransactionStatusUseCase(transactionRepo)
 
 	e := echo.New()
 	e.Use(middleware.RequestLogger())
@@ -114,6 +124,54 @@ func main() {
 
 	// Swagger UI
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
+
+	// Decision.Calculated consumer
+	decisionTopic := getEnvOrDefault("KAFKA_DECISION_CALCULATED_TOPIC", "Decision.Calculated")
+	decisionConsumerGroup := "transaction-evaluator-decision-group"
+
+	saramaConfig := sarama.NewConfig()
+	saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
+		sarama.NewBalanceStrategyRoundRobin(),
+	}
+	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+
+	group, err := sarama.NewConsumerGroup([]string{brokerAddress}, decisionConsumerGroup, saramaConfig)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to create decision consumer group")
+	}
+	defer group.Close()
+	logger.Info().
+		Str("group", decisionConsumerGroup).
+		Str("topic", decisionTopic).
+		Msg("decision consumer group connected")
+
+	decisionConsumer := kafkaIn.NewDecisionConsumer(updateStatusUseCase, logger)
+
+	// Graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		logger.Info().Msg("shutting down transaction evaluator")
+		cancel()
+	}()
+
+	// Start decision consumer in background
+	go func() {
+		for {
+			if err := group.Consume(ctx, []string{decisionTopic}, decisionConsumer); err != nil {
+				logger.Error().Err(err).Msg("decision consumer group error")
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			logger.Info().Msg("rebalancing decision consumer group")
+		}
+	}()
 
 	port := os.Getenv("EVALUATOR_APP_PORT")
 

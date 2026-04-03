@@ -38,6 +38,13 @@ services:
       KAFKA_MESSAGE_MAX_BYTES: 2097152
       KAFKA_REPLICA_FETCH_MAX_BYTES: 2097152
       KAFKA_FETCH_MAX_BYTES: 2097152
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:${KAFKA_PORT}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     networks:
       - local-network
 
@@ -80,13 +87,76 @@ services:
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: dummy
       AWS_SECRET_ACCESS_KEY: dummy
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     depends_on:
-      - kafka
-      - redis
-      - dynamodb
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      dynamodb:
+        condition: service_started
+    networks:
+      - local-network
+
+  ms-transaction-evaluator:
+    container_name: ms_transaction_evaluator
+    build:
+      context: ./ms-transaction-evaluator
+      dockerfile: Dockerfile
+    ports:
+      - "${EVALUATOR_APP_PORT}:${EVALUATOR_APP_PORT}"
+    environment:
+      EVALUATOR_APP_PORT: ${EVALUATOR_APP_PORT}
+      DYNAMO_DB_TRANSACTIONS_TABLE: ${DYNAMO_DB_TRANSACTIONS_TABLE}
+      DYNAMO_DB_ENDPOINT: http://dynamodb:${DYNAMO_DB_PORT}
+      KAFKA_BROKER_ADDRESS: kafka:29092
+      KAFKA_TRANSACTION_CREATED_TOPIC: Transaction.Created
+      KAFKA_DECISION_CALCULATED_TOPIC: Decision.Calculated
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    depends_on:
+      kafka:
+        condition: service_healthy
+      dynamodb:
+        condition: service_started
+    networks:
+      - local-network
+
+  ms-decision-service:
+    container_name: ms_decision_service
+    build:
+      context: ./ms-decision-service
+      dockerfile: Dockerfile
+    ports:
+      - "${DECISION_APP_PORT}:${DECISION_APP_PORT}"
+    environment:
+      DECISION_APP_PORT: ${DECISION_APP_PORT}
+      KAFKA_BROKER_ADDRESS: kafka:29092
+      KAFKA_CONSUMER_GROUP: decision-service-group
+      KAFKA_TRANSACTION_CREATED_TOPIC: Transaction.Created
+      KAFKA_DECISION_CALCULATED_TOPIC: Decision.Calculated
+      KAFKA_FRAUD_SCORE_REQUEST_TOPIC: FraudScore.Request
+      KAFKA_FRAUD_SCORE_CALCULATED_TOPIC: FraudScore.Calculated
+      DYNAMO_DB_RULES_TABLE: ${DYNAMO_DB_RULES_TABLE}
+      DYNAMO_DB_ENDPOINT: http://dynamodb:${DYNAMO_DB_PORT}
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    depends_on:
+      kafka:
+        condition: service_healthy
+      dynamodb:
+        condition: service_started
     networks:
       - local-network
 
 networks:
   local-network:
     driver: bridge
+
+volumes:
+  dynamodb-data:

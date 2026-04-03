@@ -7,4 +7,5 @@ import (
 
 type TransactionRepository interface {
 	Save(ctx context.Context, transaction *entity.TransactionEntity) error
+	UpdateStatus(ctx context.Context, id string, status entity.TransactionStatus) error
 }

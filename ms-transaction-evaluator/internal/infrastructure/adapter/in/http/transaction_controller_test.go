@@ -16,7 +16,11 @@ import (
 
 type mockTransactionRepository struct{}
 
-func (m *mockTransactionRepository) Save(ctx context.Context, transaction *entity.TransactionEntity) error {
+func (m *mockTransactionRepository) Save(_ context.Context, _ *entity.TransactionEntity) error {
+	return nil
+}
+
+func (m *mockTransactionRepository) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
 	return nil
 }
 

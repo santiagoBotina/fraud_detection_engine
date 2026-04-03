@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"ms-transaction-evaluator/internal/domain/entity"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -101,6 +102,48 @@ func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *e
 		Str("transaction_id", transaction.ID).
 		Str("table", r.tableName).
 		Msg("transaction saved to DynamoDB")
+
+	return nil
+}
+
+// UpdateStatus updates the status and updated_at fields of a transaction in DynamoDB.
+func (r *DynamoDBTransactionRepository) UpdateStatus(ctx context.Context, id string, status entity.TransactionStatus) error {
+	r.logger.Info().
+		Str("transaction_id", id).
+		Str("status", string(status)).
+		Str("table", r.tableName).
+		Msg("updating transaction status in DynamoDB")
+
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z07:00")
+
+	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(r.tableName),
+		Key: map[string]types.AttributeValue{
+			"id": &types.AttributeValueMemberS{Value: id},
+		},
+		UpdateExpression: aws.String("SET #s = :status, updated_at = :now"),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":status": &types.AttributeValueMemberS{Value: string(status)},
+			":now":    &types.AttributeValueMemberS{Value: now},
+		},
+	})
+	if err != nil {
+		r.logger.Error().
+			Err(err).
+			Str("transaction_id", id).
+			Str("table", r.tableName).
+			Msg("failed to update transaction status")
+		return fmt.Errorf("failed to update transaction status: %w", err)
+	}
+
+	r.logger.Info().
+		Str("transaction_id", id).
+		Str("status", string(status)).
+		Str("table", r.tableName).
+		Msg("transaction status updated")
 
 	return nil
 }

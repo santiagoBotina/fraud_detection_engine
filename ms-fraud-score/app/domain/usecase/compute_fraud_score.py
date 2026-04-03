@@ -46,6 +46,15 @@ class ComputeFraudScoreUseCase:
             request.customer_ip_address,
         )
 
+        logger.info(
+            "Computed fraud score for transaction %s: score=%d (amount=%d, method=%s, ip=%s)",
+            request.transaction_id,
+            score,
+            request.amount_in_cents,
+            request.payment_method,
+            request.customer_ip_address,
+        )
+
         result = FraudScoreResult(
             transaction_id=request.transaction_id,
             fraud_score=score,
@@ -55,12 +64,14 @@ class ComputeFraudScoreUseCase:
         # Persist to DynamoDB — failure is non-fatal (Req 3.4)
         try:
             self._store.save(result.transaction_id, result.fraud_score, result.calculated_at)
+            logger.info("Persisted score to DynamoDB for transaction %s", result.transaction_id)
         except Exception as e:
             logger.error("DynamoDB store failed: %s", e)
 
         # Cache in Redis — failure is non-fatal (Req 3.3)
         try:
             self._cache.set(result.transaction_id, result.fraud_score)
+            logger.info("Cached score in Redis for transaction %s", result.transaction_id)
         except Exception as e:
             logger.error("Redis cache failed: %s", e)
 

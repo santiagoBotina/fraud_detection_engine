@@ -2,16 +2,14 @@ FROM golang:1.26-bookworm
 
 WORKDIR /app
 
-RUN apt-get -o Acquire::https::Verify-Peer=false update -y && \
-    apt-get -o Acquire::https::Verify-Peer=false install -y git build-essential
+# CA bundle for Netskope / corporate proxy
+COPY combined-ca-bundle.pem /usr/local/share/ca-certificates/combined-ca-bundle.crt
+RUN update-ca-certificates
 
-ENV GONOSUMDB=*
-ENV GOINSECURE=*
-ENV GONOPROXY=*
-ENV GONOSUMCHECK=*
-ENV GOPROXY=off
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
-RUN git config --global http.sslVerify false
+RUN apt-get update -y && \
+    apt-get install -y git build-essential
 
 RUN go install github.com/air-verse/air@latest
 ENV PATH="/go/bin:${PATH}"

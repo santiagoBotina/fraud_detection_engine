@@ -36,11 +36,9 @@ const (
 type TransactionStatus string
 
 const (
-	PENDING   TransactionStatus = "PENDING"
-	APPROVED  TransactionStatus = "APPROVED"
-	REJECTED  TransactionStatus = "REJECTED"
-	FAILED    TransactionStatus = "FAILED"
-	CANCELLED TransactionStatus = "CANCELLED"
+	PENDING  TransactionStatus = "PENDING"
+	APPROVED TransactionStatus = "APPROVED"
+	DECLINED TransactionStatus = "DECLINED"
 )
 
 type TransactionEntity struct {

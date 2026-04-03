@@ -18,6 +18,10 @@ func (m *mockTransactionRepository) Save(ctx context.Context, transaction *entit
 	return nil
 }
 
+func (m *mockTransactionRepository) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+	return nil
+}
+
 type mockEventPublisher struct {
 	publishFunc func(ctx context.Context, transaction *entity.TransactionEntity) error
 }
