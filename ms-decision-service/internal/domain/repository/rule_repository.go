@@ -8,4 +8,5 @@ import (
 // RuleRepository defines the port for retrieving fraud detection rules.
 type RuleRepository interface {
 	FindActiveRulesSortedByPriority(ctx context.Context) ([]entity.Rule, error)
+	FindAll(ctx context.Context) ([]entity.Rule, error)
 }

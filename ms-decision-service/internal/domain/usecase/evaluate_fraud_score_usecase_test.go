@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"pgregory.net/rapid"
 )
 
@@ -70,7 +71,7 @@ func TestProperty_FraudScoreRulesNeverProduceFraudCheck(t *testing.T) {
 		}
 		decisionPub := &mockDecisionPublisher{}
 
-		uc := NewEvaluateFraudScoreUseCase(ruleRepo, decisionPub)
+		uc := NewEvaluateFraudScoreUseCase(ruleRepo, decisionPub, &mockRuleEvaluationRepository{}, zerolog.Nop())
 		result, err := uc.Execute(context.Background(), msg)
 
 		if err != nil {
@@ -118,7 +119,7 @@ func TestProperty_FraudScoreEvaluationProducesDecisionAndPublishes(t *testing.T)
 		}
 		decisionPub := &mockDecisionPublisher{}
 
-		uc := NewEvaluateFraudScoreUseCase(ruleRepo, decisionPub)
+		uc := NewEvaluateFraudScoreUseCase(ruleRepo, decisionPub, &mockRuleEvaluationRepository{}, zerolog.Nop())
 		result, err := uc.Execute(context.Background(), msg)
 
 		// Assert no error returned
@@ -153,6 +154,208 @@ func TestProperty_FraudScoreEvaluationProducesDecisionAndPublishes(t *testing.T)
 		}
 		if result.Status != entity.APPROVED && result.Status != entity.DECLINED {
 			t.Fatalf("expected result status to be APPROVED or DECLINED, got %q", result.Status)
+		}
+	})
+}
+
+// --- Tests for rule evaluation persistence (Task 3.4) ---
+// Validates: Requirements 3.1, 3.2
+
+func TestEvaluateFraudScoreUseCase_RuleEvaluationPersistence(t *testing.T) {
+	t.Run("SaveBatch called with correct number of results matching fraud score rules count", func(t *testing.T) {
+		msg := &entity.FraudScoreCalculatedMessage{
+			TransactionID: "tx-persist-1",
+			FraudScore:    75,
+			CalculatedAt:  time.Now(),
+		}
+		rules := []entity.Rule{
+			{
+				RuleID:            "rule-fs-1",
+				RuleName:          "High score decline",
+				ConditionField:    entity.FieldFraudScore,
+				ConditionOperator: entity.OpGreaterThan,
+				ConditionValue:    "70",
+				ResultStatus:      entity.DECLINED,
+				Priority:          1,
+				IsActive:          true,
+			},
+			{
+				RuleID:            "rule-fs-2",
+				RuleName:          "Medium score approve",
+				ConditionField:    entity.FieldFraudScore,
+				ConditionOperator: entity.OpLessThanOrEqual,
+				ConditionValue:    "50",
+				ResultStatus:      entity.APPROVED,
+				Priority:          2,
+				IsActive:          true,
+			},
+			{
+				// Non-fraud-score rule — should NOT be persisted by fraud score use case
+				RuleID:            "rule-tx-1",
+				RuleName:          "Block CRYPTO",
+				ConditionField:    entity.FieldPaymentMethod,
+				ConditionOperator: entity.OpEqual,
+				ConditionValue:    "CRYPTO",
+				ResultStatus:      entity.DECLINED,
+				Priority:          3,
+				IsActive:          true,
+			},
+		}
+
+		ruleRepo := &mockRuleRepository{
+			findFunc: func(_ context.Context) ([]entity.Rule, error) {
+				return rules, nil
+			},
+		}
+		ruleEvalRepo := &mockRuleEvaluationRepository{}
+
+		uc := NewEvaluateFraudScoreUseCase(ruleRepo, &mockDecisionPublisher{}, ruleEvalRepo, zerolog.Nop())
+		_, err := uc.Execute(context.Background(), msg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !ruleEvalRepo.saveCalled {
+			t.Fatal("expected SaveBatch to be called")
+		}
+		// Only fraud_score rules should be persisted (2 out of 3)
+		expectedCount := 2
+		if len(ruleEvalRepo.lastResults) != expectedCount {
+			t.Fatalf("expected %d results (fraud_score rules only), got %d", expectedCount, len(ruleEvalRepo.lastResults))
+		}
+	})
+
+	t.Run("each result has all required fields populated", func(t *testing.T) {
+		msg := &entity.FraudScoreCalculatedMessage{
+			TransactionID: "tx-persist-2",
+			FraudScore:    45,
+			CalculatedAt:  time.Now(),
+		}
+		rules := []entity.Rule{
+			{
+				RuleID:            "rule-fs-1",
+				RuleName:          "High score decline",
+				ConditionField:    entity.FieldFraudScore,
+				ConditionOperator: entity.OpGreaterThan,
+				ConditionValue:    "70",
+				ResultStatus:      entity.DECLINED,
+				Priority:          1,
+				IsActive:          true,
+			},
+			{
+				RuleID:            "rule-fs-2",
+				RuleName:          "Low score approve",
+				ConditionField:    entity.FieldFraudScore,
+				ConditionOperator: entity.OpLessThanOrEqual,
+				ConditionValue:    "50",
+				ResultStatus:      entity.APPROVED,
+				Priority:          2,
+				IsActive:          true,
+			},
+		}
+
+		ruleRepo := &mockRuleRepository{
+			findFunc: func(_ context.Context) ([]entity.Rule, error) {
+				return rules, nil
+			},
+		}
+		ruleEvalRepo := &mockRuleEvaluationRepository{}
+
+		uc := NewEvaluateFraudScoreUseCase(ruleRepo, &mockDecisionPublisher{}, ruleEvalRepo, zerolog.Nop())
+		_, err := uc.Execute(context.Background(), msg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		for i, result := range ruleEvalRepo.lastResults {
+			if result.TransactionID == "" {
+				t.Errorf("result[%d]: TransactionID is empty", i)
+			}
+			if result.TransactionID != msg.TransactionID {
+				t.Errorf("result[%d]: TransactionID = %q, want %q", i, result.TransactionID, msg.TransactionID)
+			}
+			if result.RuleID == "" {
+				t.Errorf("result[%d]: RuleID is empty", i)
+			}
+			if result.RuleName == "" {
+				t.Errorf("result[%d]: RuleName is empty", i)
+			}
+			if result.ConditionField == "" {
+				t.Errorf("result[%d]: ConditionField is empty", i)
+			}
+			if result.ConditionOperator == "" {
+				t.Errorf("result[%d]: ConditionOperator is empty", i)
+			}
+			if result.ConditionValue == "" {
+				t.Errorf("result[%d]: ConditionValue is empty", i)
+			}
+			if result.ActualFieldValue == "" {
+				t.Errorf("result[%d]: ActualFieldValue is empty", i)
+			}
+			if result.ResultStatus == "" {
+				t.Errorf("result[%d]: ResultStatus is empty", i)
+			}
+			if result.EvaluatedAt.IsZero() {
+				t.Errorf("result[%d]: EvaluatedAt is zero", i)
+			}
+			if result.Priority == 0 {
+				t.Errorf("result[%d]: Priority is zero", i)
+			}
+			// Verify the actual field value is the fraud score string
+			if result.ActualFieldValue != fmt.Sprintf("%d", msg.FraudScore) {
+				t.Errorf("result[%d]: ActualFieldValue = %q, want %q", i, result.ActualFieldValue, fmt.Sprintf("%d", msg.FraudScore))
+			}
+		}
+	})
+
+	t.Run("persistence failure does not block decision publishing", func(t *testing.T) {
+		msg := &entity.FraudScoreCalculatedMessage{
+			TransactionID: "tx-persist-3",
+			FraudScore:    80,
+			CalculatedAt:  time.Now(),
+		}
+		rules := []entity.Rule{
+			{
+				RuleID:            "rule-fs-1",
+				RuleName:          "High score decline",
+				ConditionField:    entity.FieldFraudScore,
+				ConditionOperator: entity.OpGreaterThan,
+				ConditionValue:    "70",
+				ResultStatus:      entity.DECLINED,
+				Priority:          1,
+				IsActive:          true,
+			},
+		}
+
+		ruleRepo := &mockRuleRepository{
+			findFunc: func(_ context.Context) ([]entity.Rule, error) {
+				return rules, nil
+			},
+		}
+		decisionPub := &mockDecisionPublisher{}
+		ruleEvalRepo := &mockRuleEvaluationRepository{
+			saveBatchFunc: func(_ context.Context, _ []entity.RuleEvaluationResult) error {
+				return errors.New("dynamodb write failure")
+			},
+		}
+
+		uc := NewEvaluateFraudScoreUseCase(ruleRepo, decisionPub, ruleEvalRepo, zerolog.Nop())
+		result, err := uc.Execute(context.Background(), msg)
+
+		if err != nil {
+			t.Fatalf("expected no error despite persistence failure, got: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Status != entity.DECLINED {
+			t.Errorf("expected DECLINED status, got %q", result.Status)
+		}
+		if !decisionPub.called {
+			t.Error("expected decision publisher to be called despite persistence failure")
+		}
+		if !ruleEvalRepo.saveCalled {
+			t.Error("expected SaveBatch to have been attempted")
 		}
 	})
 }
@@ -281,7 +484,7 @@ func TestEvaluateFraudScoreUseCase_Execute(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			uc := NewEvaluateFraudScoreUseCase(tc.ruleRepo, tc.publisher)
+			uc := NewEvaluateFraudScoreUseCase(tc.ruleRepo, tc.publisher, &mockRuleEvaluationRepository{}, zerolog.Nop())
 			result, err := uc.Execute(context.Background(), tc.msg)
 
 			if tc.wantErr != nil {

@@ -4,7 +4,7 @@ Wires all adapters (Kafka, Redis, DynamoDB) and domain services following
 hexagonal architecture. Starts the Kafka consumer in a background thread
 on application startup and stops it on shutdown.
 
-Implements Requirements 6.1, 6.2, 6.5.
+Implements Requirements 5.1, 5.2, 5.3, 6.1, 6.2, 6.5, 12.3.
 """
 
 from __future__ import annotations
@@ -16,9 +16,12 @@ from contextlib import asynccontextmanager
 import boto3
 import redis
 from confluent_kafka import Consumer, Producer
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import config
+from app.domain.port.score_cache import ScoreCache
+from app.domain.port.score_store import ScoreStore
 from app.domain.service.fuzzy_logic_scorer import FuzzyLogicScorer
 from app.domain.usecase.compute_fraud_score import ComputeFraudScoreUseCase
 from app.infrastructure.adapter.inbound.kafka_consumer import FraudScoreRequestConsumer
@@ -32,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 _consumer_instance: FraudScoreRequestConsumer | None = None
 _consumer_thread: threading.Thread | None = None
+_score_cache: ScoreCache | None = None
+_score_store: ScoreStore | None = None
 
 
 def _build_kafka_producer() -> Producer:
@@ -63,8 +68,8 @@ def _build_dynamodb_table():
     return dynamodb.Table(config.DYNAMO_DB_FRAUD_SCORES_TABLE)
 
 
-def _wire_consumer() -> FraudScoreRequestConsumer:
-    """Create and wire all dependencies, returning the Kafka consumer adapter."""
+def _wire_consumer() -> tuple[FraudScoreRequestConsumer, RedisScoreCache, DynamoDBScoreStore]:
+    """Create and wire all dependencies, returning the Kafka consumer adapter and data adapters."""
     producer = _build_kafka_producer()
     consumer = _build_kafka_consumer()
     redis_client = _build_redis_client()
@@ -82,20 +87,22 @@ def _wire_consumer() -> FraudScoreRequestConsumer:
         store=store,
     )
 
-    return FraudScoreRequestConsumer(
+    kafka_consumer = FraudScoreRequestConsumer(
         consumer=consumer,
         topic=config.KAFKA_FRAUD_SCORE_REQUEST_TOPIC,
         use_case=use_case,
     )
 
+    return kafka_consumer, cache, store
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Manage Kafka consumer lifecycle: start on startup, stop on shutdown."""
-    global _consumer_instance, _consumer_thread
+    global _consumer_instance, _consumer_thread, _score_cache, _score_store
 
     logger.info("Starting Kafka consumer for topic %s", config.KAFKA_FRAUD_SCORE_REQUEST_TOPIC)
-    _consumer_instance = _wire_consumer()
+    _consumer_instance, _score_cache, _score_store = _wire_consumer()
     _consumer_thread = threading.Thread(target=_consumer_instance.start, daemon=True)
     _consumer_thread.start()
 
@@ -109,4 +116,49 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="Fraud Score Service", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(health_router)
+
+
+@app.get("/scores/{transaction_id}")
+async def get_score(transaction_id: str):
+    """Retrieve fraud score for a transaction.
+
+    Checks Redis cache first, falls back to DynamoDB.
+    Returns 404 if not found in either.
+    """
+    # Cache-first lookup
+    if _score_cache is not None:
+        try:
+            cached_score = _score_cache.get(transaction_id)
+            if cached_score is not None:
+                return {
+                    "transaction_id": transaction_id,
+                    "fraud_score": cached_score,
+                    "calculated_at": None,
+                }
+        except Exception:
+            logger.warning("Redis lookup failed for %s, falling back to DynamoDB", transaction_id)
+
+    # Fallback to DynamoDB
+    if _score_store is not None:
+        record = _score_store.get(transaction_id)
+        if record is not None:
+            return {
+                "transaction_id": record["transaction_id"],
+                "fraud_score": record["fraud_score"],
+                "calculated_at": record["calculated_at"],
+            }
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Fraud score not found for transaction_id: {transaction_id}",
+    )

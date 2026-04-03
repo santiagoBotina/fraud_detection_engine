@@ -75,6 +75,8 @@ services:
     build:
       context: ./ms-fraud-score
       dockerfile: Dockerfile
+    ports:
+      - "${FRAUD_SCORE_APP_PORT}:8000"
     environment:
       KAFKA_BROKER_ADDRESS: kafka:29092
       KAFKA_CONSUMER_GROUP: fraud-score-group
@@ -141,6 +143,7 @@ services:
       KAFKA_FRAUD_SCORE_REQUEST_TOPIC: FraudScore.Request
       KAFKA_FRAUD_SCORE_CALCULATED_TOPIC: FraudScore.Calculated
       DYNAMO_DB_RULES_TABLE: ${DYNAMO_DB_RULES_TABLE}
+      DYNAMO_DB_RULE_EVALUATIONS_TABLE: ${DYNAMO_DB_RULE_EVALUATIONS_TABLE}
       DYNAMO_DB_ENDPOINT: http://dynamodb:${DYNAMO_DB_PORT}
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: dummy
@@ -151,6 +154,16 @@ services:
         condition: service_healthy
       dynamodb:
         condition: service_started
+    networks:
+      - local-network
+
+  dashboard:
+    container_name: fraud_analyst_dashboard
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
     networks:
       - local-network
 

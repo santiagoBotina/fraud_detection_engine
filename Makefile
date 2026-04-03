@@ -1,6 +1,6 @@
 include .env
 
-setup: start wait-for-infra create-transactions-table create-rules-table create-fraud-scores-table seed create-topics
+setup: start wait-for-infra create-transactions-table create-rules-table create-rule-evaluations-table create-fraud-scores-table seed create-topics
 
 start:
 	docker compose up -d --build
@@ -88,6 +88,24 @@ create-decision-topic:
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
 	  --partitions 1 \
 	  --replication-factor 1
+
+create-rule-evaluations-table:
+	docker run --rm \
+	  --network fraud_detection_engine_local-network \
+	  -e AWS_ACCESS_KEY_ID=dummy \
+	  -e AWS_SECRET_ACCESS_KEY=dummy \
+	  -e AWS_DEFAULT_REGION=us-east-1 \
+	  amazon/aws-cli dynamodb create-table \
+	  --table-name $(DYNAMO_DB_RULE_EVALUATIONS_TABLE) \
+	  --attribute-definitions \
+	    AttributeName=transaction_id,AttributeType=S \
+	    AttributeName=rule_id,AttributeType=S \
+	  --key-schema \
+	    AttributeName=transaction_id,KeyType=HASH \
+	    AttributeName=rule_id,KeyType=RANGE \
+	  --billing-mode PAY_PER_REQUEST \
+	  --endpoint-url $(DYNAMO_DB_ENDPOINT) \
+	  --region us-east-1
 
 
 # === FRAUD SCORE SERVICE ===

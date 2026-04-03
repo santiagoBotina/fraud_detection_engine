@@ -4,6 +4,8 @@ Feature: fraud-score-service, Property 4: Compute use case persists, caches, and
 Validates: Requirements 3.1, 3.2, 4.1
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from hypothesis import given, settings
@@ -25,6 +27,9 @@ class MockScoreStore(ScoreStore):
     def save(self, transaction_id: str, score: int, calculated_at: datetime) -> None:
         self.calls.append((transaction_id, score, calculated_at))
 
+    def get(self, transaction_id: str) -> dict | None:
+        return None
+
 
 class MockScoreCache(ScoreCache):
     def __init__(self) -> None:
@@ -32,6 +37,9 @@ class MockScoreCache(ScoreCache):
 
     def set(self, transaction_id: str, score: int) -> None:
         self.calls.append((transaction_id, score))
+
+    def get(self, transaction_id: str) -> int | None:
+        return None
 
 
 class MockScorePublisher(ScorePublisher):
@@ -107,12 +115,18 @@ class FailingScoreCache(ScoreCache):
     def set(self, transaction_id: str, score: int) -> None:
         raise ConnectionError("Redis unavailable")
 
+    def get(self, transaction_id: str) -> int | None:
+        raise ConnectionError("Redis unavailable")
+
 
 class FailingScoreStore(ScoreStore):
     """A ScoreStore that always raises on save(), simulating DynamoDB write failure."""
 
     def save(self, transaction_id: str, score: int, calculated_at: datetime) -> None:
         raise RuntimeError("DynamoDB write failed")
+
+    def get(self, transaction_id: str) -> dict | None:
+        raise RuntimeError("DynamoDB read failed")
 
 
 def _make_request() -> FraudScoreRequest:

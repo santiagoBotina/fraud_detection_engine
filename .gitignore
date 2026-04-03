@@ -5,7 +5,7 @@ dist/
 build/
 
 tmp
-
+.vscode
 ### Go ###
 
 # Binaries for programs and plugins
@@ -33,6 +33,10 @@ go.work
 .venv
 .pytest_cache
 .hypothesis
+
+### JAVASCRIPT ###
+
+node_modules
 
 ### Certificates ###
 combined-ca-bundle.pem

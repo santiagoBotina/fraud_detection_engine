@@ -9,6 +9,7 @@ import (
 	kafkaIn "ms-transaction-evaluator/internal/infrastructure/adapter/in/kafka"
 	dynamodbAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/aws/dynamodb"
 	kafkaAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/kafka"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -112,15 +113,26 @@ func main() {
 	validateUseCase := usecase.NewValidateCreateTransactionPayloadUseCase()
 	saveUseCase := usecase.NewSaveTransactionUseCase(transactionRepo, eventPublisher)
 	updateStatusUseCase := usecase.NewUpdateTransactionStatusUseCase(transactionRepo)
+	listTransactionsUseCase := usecase.NewListTransactionsUseCase(transactionRepo)
+	getTransactionUseCase := usecase.NewGetTransactionUseCase(transactionRepo)
 
 	e := echo.New()
 	e.Use(middleware.RequestLogger())
 
-	// Initialize controller
+	// CORS middleware — allow dashboard origin
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"http://localhost:5173"},
+		AllowMethods: []string{http.MethodGet, http.MethodOptions},
+		AllowHeaders: []string{echo.HeaderContentType},
+	}))
+
+	// Initialize controllers
 	transactionController := httpAdapter.NewTransactionController(validateUseCase, saveUseCase, logger)
+	transactionQueryController := httpAdapter.NewTransactionQueryController(listTransactionsUseCase, getTransactionUseCase, logger)
 
 	// Register routes
 	transactionController.RegisterRoutes(e)
+	transactionQueryController.RegisterRoutes(e)
 
 	// Swagger UI
 	e.GET("/swagger/*", echoSwagger.WrapHandler)

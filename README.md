@@ -13,6 +13,7 @@ A backend system for evaluating financial transactions and detecting potential f
   - [Transaction Evaluator](#transaction-evaluator-ms-transaction-evaluator)
   - [Decision Service](#decision-service-ms-decision-service)
   - [Fraud Score Service](#fraud-score-service-ms-fraud-score)
+  - [BastionIQ Dashboard](#bastioniq-dashboard-dashboard)
 - [Infrastructure](#infrastructure)
 - [Kafka Topics](#kafka-topics)
 - [DynamoDB Tables](#dynamodb-tables)
@@ -188,6 +189,38 @@ Responsibilities:
 
 The fuzzy inference system uses trapezoidal and triangular membership functions with 7 inference rules to classify transactions into low, medium, and high fraud risk categories.
 
+### BastionIQ Dashboard (`dashboard`)
+
+A read-only Single Page Application that gives fraud analysts a unified view of transactions, rule evaluations, and fraud scores across all three microservices.
+
+| Property | Value |
+|---|---|
+| Language | TypeScript |
+| Framework | React 18 + Vite |
+| Port | 5173 |
+
+Responsibilities:
+- Display paginated transaction list with status badges and currency formatting
+- Show dashboard analytics: transaction volume (day/week/month), approval and decline rates, payment method distribution
+- Transaction detail view with all fields, rule evaluation results (with color-coded conditions), and detailed fraud score analysis
+- Dark mode toggle with localStorage persistence
+- Manual refresh and configurable auto-refresh (10s, 30s, 1min, 5min)
+- Graceful error handling with retry buttons for each microservice
+
+#### Screenshots
+
+**Dashboard home — analytics overview and transaction list**
+
+![Dashboard home](docs/images/dashboard-home.png)
+
+**Transaction detail — customer information and transaction fields**
+
+![Transaction detail - customer info](docs/images/dashboard-detail-customer-info.png)
+
+**Transaction detail — rule evaluations and fraud score analysis**
+
+![Transaction detail - rules and score](docs/images/dashboard-detail-rules-and-score.png)
+
 ---
 
 ## Infrastructure
@@ -201,6 +234,7 @@ All infrastructure runs locally via Docker Compose.
 | Kafka | `confluentinc/cp-kafka:7.5.0` | 9092 | Event streaming |
 | Kafka UI | `provectuslabs/kafka-ui` | 8080 | Kafka topic browser and monitoring |
 | Redis | `redis:7-alpine` | 6379 | Fraud score caching |
+| BastionIQ Dashboard | `node:20 + nginx` | 5173 | Fraud analyst dashboard SPA |
 
 ---
 
@@ -217,11 +251,12 @@ All infrastructure runs locally via Docker Compose.
 
 ## DynamoDB Tables
 
-| Table | Partition Key | Service |
-|---|---|---|
-| `ddb-transactions` | `id` (String) | Transaction Evaluator |
-| `ddb-rules` | `rule_id` (String) | Decision Service |
-| `ddb-fraud-scores` | `transaction_id` (String) | Fraud Score Service |
+| Table | Partition Key | Sort Key | Service |
+|---|---|---|---|
+| `ddb-transactions` | `id` (String) | — | Transaction Evaluator |
+| `ddb-rules` | `rule_id` (String) | — | Decision Service |
+| `ddb-rule-evaluations` | `transaction_id` (String) | `rule_id` (String) | Decision Service |
+| `ddb-fraud-scores` | `transaction_id` (String) | — | Fraud Score Service |
 
 ---
 
@@ -345,6 +380,9 @@ cd ms-decision-service && make test
 
 # Fraud Score Service
 cd ms-fraud-score && make test
+
+# Dashboard
+cd dashboard && npm test
 ```
 
 ### Linting
@@ -387,6 +425,7 @@ cd ms-fraud-score && make list-scores
 | Transaction Evaluator | Go 1.25, Echo v5, AWS SDK v2, Sarama (Kafka), zerolog |
 | Decision Service | Go 1.25, Sarama (Kafka), AWS SDK v2, zerolog |
 | Fraud Score Service | Python 3.12, FastAPI, confluent-kafka, scikit-fuzzy, Redis, boto3 |
+| BastionIQ Dashboard | TypeScript, React 18, Vite, React Router v6 |
 | Message Broker | Apache Kafka 7.5.0 (Confluent) + Zookeeper |
 | Database | Amazon DynamoDB Local |
 | Cache | Redis 7 (Alpine) |
@@ -454,6 +493,24 @@ cd ms-fraud-score && make list-scores
 │   │           └── outbound/       # Redis cache, DynamoDB store, Kafka publisher
 │   ├── requirements.txt
 │   └── Makefile
+│
+├── dashboard/                      # BastionIQ Dashboard (React + TypeScript)
+│   ├── src/
+│   │   ├── api/                    # API client modules (transactions, evaluations, scores)
+│   │   ├── components/             # Shared UI (StatusBadge, ScoreIndicator, ErrorBanner, DashboardStats)
+│   │   ├── hooks/                  # Custom hooks (useTheme)
+│   │   ├── pages/                  # TransactionList, TransactionDetail
+│   │   ├── utils/                  # Formatters (currency, date, evaluation time)
+│   │   ├── App.tsx                 # Router + layout + navbar
+│   │   └── main.tsx                # Entry point
+│   ├── public/icons/logo.svg       # BastionIQ logo
+│   ├── Dockerfile                  # Multi-stage: node build → nginx serve
+│   ├── package.json
+│   └── vite.config.ts
+│
+└── docs/
+    ├── images/                     # Dashboard screenshots
+    └── fraud_detection_engine.drawio
 │
 └── docs/
     └── fraud_detection_engine.drawio

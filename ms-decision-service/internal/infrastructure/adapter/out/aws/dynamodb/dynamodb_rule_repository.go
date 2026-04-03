@@ -88,6 +88,50 @@ func (r *DynamoDBRuleRepository) FindActiveRulesSortedByPriority(ctx context.Con
 	return rules, nil
 }
 
+// FindAll scans the rules table for all rules (active and inactive) and sorts by priority ascending.
+func (r *DynamoDBRuleRepository) FindAll(ctx context.Context) ([]entity.Rule, error) {
+	r.logger.Info().Str("table", r.tableName).Msg("scanning rules table for all rules")
+
+	input := &dynamodb.ScanInput{
+		TableName: aws.String(r.tableName),
+	}
+
+	result, err := r.client.Scan(ctx, input)
+	if err != nil {
+		r.logger.Error().Err(err).Str("table", r.tableName).Msg("failed to scan rules table")
+		return nil, fmt.Errorf("failed to scan rules table: %w", err)
+	}
+
+	var items []ruleItem
+	if err := attributevalue.UnmarshalListOfMaps(result.Items, &items); err != nil {
+		r.logger.Error().Err(err).Str("table", r.tableName).
+			Int("item_count", len(result.Items)).Msg("failed to unmarshal rules")
+		return nil, fmt.Errorf("failed to unmarshal rules: %w", err)
+	}
+
+	rules := make([]entity.Rule, len(items))
+	for i, item := range items {
+		rules[i] = entity.Rule{
+			RuleID:            item.RuleID,
+			RuleName:          item.RuleName,
+			ConditionField:    entity.ConditionField(item.ConditionField),
+			ConditionOperator: entity.ConditionOperator(item.ConditionOperator),
+			ConditionValue:    item.ConditionValue,
+			ResultStatus:      entity.DecisionStatus(item.ResultStatus),
+			Priority:          item.Priority,
+			IsActive:          item.IsActive,
+		}
+	}
+
+	sort.Slice(rules, func(i, j int) bool {
+		return rules[i].Priority < rules[j].Priority
+	})
+
+	r.logger.Info().Str("table", r.tableName).Int("total_count", len(rules)).Msg("all rules loaded")
+
+	return rules, nil
+}
+
 // FilterAndSortActiveRules filters rules to only active ones and sorts by priority ascending.
 // This is exported for testing purposes.
 func FilterAndSortActiveRules(rules []entity.Rule) []entity.Rule {

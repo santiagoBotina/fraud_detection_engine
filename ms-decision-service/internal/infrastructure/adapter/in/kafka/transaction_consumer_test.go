@@ -16,10 +16,21 @@ import (
 // --- Mock RuleRepository ---
 
 type mockRuleRepository struct {
-	findFunc func(ctx context.Context) ([]entity.Rule, error)
+	findFunc    func(ctx context.Context) ([]entity.Rule, error)
+	findAllFunc func(ctx context.Context) ([]entity.Rule, error)
 }
 
 func (m *mockRuleRepository) FindActiveRulesSortedByPriority(ctx context.Context) ([]entity.Rule, error) {
+	if m.findFunc != nil {
+		return m.findFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockRuleRepository) FindAll(ctx context.Context) ([]entity.Rule, error) {
+	if m.findAllFunc != nil {
+		return m.findAllFunc(ctx)
+	}
 	if m.findFunc != nil {
 		return m.findFunc(ctx)
 	}
@@ -52,6 +63,18 @@ func (m *mockFraudScoreRequestPublisher) Publish(ctx context.Context, transactio
 		return m.publishFunc(ctx, transaction)
 	}
 	return nil
+}
+
+// --- Mock RuleEvaluationRepository ---
+
+type mockRuleEvaluationRepository struct{}
+
+func (m *mockRuleEvaluationRepository) SaveBatch(_ context.Context, _ []entity.RuleEvaluationResult) error {
+	return nil
+}
+
+func (m *mockRuleEvaluationRepository) FindByTransactionID(_ context.Context, _ string) ([]entity.RuleEvaluationResult, error) {
+	return nil, nil
 }
 
 // --- Mock ConsumerGroupSession ---
@@ -87,7 +110,7 @@ func (m *mockConsumerGroupClaim) Messages() <-chan *sarama.ConsumerMessage { ret
 // --- Helper ---
 
 func buildUseCase(ruleRepo repository.RuleRepository, publisher repository.DecisionPublisher) *usecase.EvaluateTransactionUseCase {
-	return usecase.NewEvaluateTransactionUseCase(ruleRepo, publisher, &mockFraudScoreRequestPublisher{})
+	return usecase.NewEvaluateTransactionUseCase(ruleRepo, publisher, &mockFraudScoreRequestPublisher{}, &mockRuleEvaluationRepository{}, zerolog.Nop())
 }
 
 func validTransactionJSON() []byte {

@@ -22,6 +22,14 @@ func (m *mockTransactionRepository) UpdateStatus(_ context.Context, _ string, _ 
 	return nil
 }
 
+func (m *mockTransactionRepository) FindByID(_ context.Context, _ string) (*entity.TransactionEntity, error) {
+	return nil, nil
+}
+
+func (m *mockTransactionRepository) FindAllPaginated(_ context.Context, _ int, _ string) ([]entity.TransactionEntity, string, error) {
+	return nil, "", nil
+}
+
 type mockEventPublisher struct {
 	publishFunc func(ctx context.Context, transaction *entity.TransactionEntity) error
 }

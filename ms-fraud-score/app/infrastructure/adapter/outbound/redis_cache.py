@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import redis
 
 from app.domain.port.score_cache import ScoreCache
@@ -14,3 +16,10 @@ class RedisScoreCache(ScoreCache):
     def set(self, transaction_id: str, score: int) -> None:
         key = f"fraud_score:{transaction_id}"
         self._client.set(key, score, ex=_TTL_SECONDS)
+
+    def get(self, transaction_id: str) -> int | None:
+        key = f"fraud_score:{transaction_id}"
+        raw = self._client.get(key)
+        if raw is None:
+            return None
+        return int(raw)

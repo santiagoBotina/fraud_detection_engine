@@ -4,11 +4,13 @@ import (
 	"context"
 	"io"
 	"ms-decision-service/internal/domain/usecase"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	httpAdapter "ms-decision-service/internal/infrastructure/adapter/in/http"
 	kafkaIn "ms-decision-service/internal/infrastructure/adapter/in/kafka"
 	dynamodbAdapter "ms-decision-service/internal/infrastructure/adapter/out/aws/dynamodb"
 	kafkaOut "ms-decision-service/internal/infrastructure/adapter/out/kafka"
@@ -18,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
 )
 
@@ -60,6 +64,10 @@ func main() {
 	ruleRepo := dynamodbAdapter.NewDynamoDBRuleRepository(dynamoClient, rulesTable, logger)
 	logger.Info().Str("table", rulesTable).Msg("rules repository initialized")
 
+	ruleEvalsTable := getEnvOrDefault("DYNAMO_DB_RULE_EVALUATIONS_TABLE", "ddb-rule-evaluations")
+	ruleEvalRepo := dynamodbAdapter.NewDynamoDBRuleEvaluationRepository(dynamoClient, ruleEvalsTable, logger)
+	logger.Info().Str("table", ruleEvalsTable).Msg("rule evaluations repository initialized")
+
 	// Kafka producer for decision results
 	brokerAddress := getEnvOrDefault("KAFKA_BROKER_ADDRESS", "localhost:9092")
 	decisionTopic := getEnvOrDefault("KAFKA_DECISION_CALCULATED_TOPIC", "Decision.Calculated")
@@ -80,8 +88,23 @@ func main() {
 	logger.Info().Str("topic", fraudScoreRequestTopic).Msg("fraud score request publisher initialized")
 
 	// Use cases
-	evaluateUC := usecase.NewEvaluateTransactionUseCase(ruleRepo, decisionPublisher, fraudScorePublisher)
-	evaluateFraudScoreUC := usecase.NewEvaluateFraudScoreUseCase(ruleRepo, decisionPublisher)
+	evaluateUC := usecase.NewEvaluateTransactionUseCase(ruleRepo, decisionPublisher, fraudScorePublisher, ruleEvalRepo, logger)
+	evaluateFraudScoreUC := usecase.NewEvaluateFraudScoreUseCase(ruleRepo, decisionPublisher, ruleEvalRepo, logger)
+	getRuleEvaluationsUC := usecase.NewGetRuleEvaluationsUseCase(ruleEvalRepo)
+	listRulesUC := usecase.NewListRulesUseCase(ruleRepo)
+
+	// Echo HTTP server
+	e := echo.New()
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"http://localhost:5173"},
+		AllowMethods: []string{http.MethodGet, http.MethodOptions},
+		AllowHeaders: []string{echo.HeaderContentType},
+	}))
+
+	evaluationController := httpAdapter.NewEvaluationController(getRuleEvaluationsUC, listRulesUC, logger)
+	evaluationController.RegisterRoutes(e)
+
+	port := getEnvOrDefault("DECISION_APP_PORT", "3001")
 
 	// Kafka consumer
 	consumerGroup := getEnvOrDefault("KAFKA_CONSUMER_GROUP", "decision-service-group")
@@ -134,6 +157,14 @@ func main() {
 		Str("consumer_group", consumerGroup).
 		Str("topic", pendingTopic).
 		Msg("decision service started, consuming messages")
+
+	// Start Echo HTTP server in a goroutine
+	go func() {
+		logger.Info().Str("port", port).Msg("starting HTTP server")
+		if err := e.Start(":" + port); err != nil {
+			logger.Error().Err(err).Msg("HTTP server error")
+		}
+	}()
 
 	// Start fraud score consumer in a goroutine
 	go func() {
