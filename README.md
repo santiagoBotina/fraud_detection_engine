@@ -18,6 +18,7 @@ A backend system for evaluating financial transactions and detecting potential f
 - [Kafka Topics](#kafka-topics)
 - [DynamoDB Tables](#dynamodb-tables)
 - [Rules Engine](#rules-engine)
+- [Observability](#observability)
 - [Getting Started](#getting-started)
 - [Testing Scenarios](#testing-scenarios)
 - [Development](#development)
@@ -235,6 +236,13 @@ All infrastructure runs locally via Docker Compose.
 | Kafka UI | `provectuslabs/kafka-ui` | 8080 | Kafka topic browser and monitoring |
 | Redis | `redis:7-alpine` | 6379 | Fraud score caching |
 | BastionIQ Dashboard | `node:20 + nginx` | 5173 | Fraud analyst dashboard SPA |
+| Grafana | `grafana/grafana:11.6.0` | 3003 | Observability dashboards |
+| Loki + Promtail | `grafana/loki:3.5.0` | 3100 | Log aggregation |
+| Tempo | `grafana/tempo:2.7.2` | 3200 | Distributed tracing |
+| Prometheus | `prom/prometheus:v3.4.1` | 9090 | Metrics storage |
+| OTel Collector | `otel/opentelemetry-collector-contrib:0.127.0` | 4317 | Telemetry pipeline |
+| cAdvisor | `gcr.io/cadvisor/cadvisor:v0.52.1` | 8081 | Container resource monitoring |
+| Kafka Exporter | `danielqsj/kafka-exporter:v1.9.0` | 9308 | Kafka metrics exporter |
 
 ---
 
@@ -273,6 +281,76 @@ Rules are stored in DynamoDB and evaluated in priority order (lowest number = hi
 | 10 | Decline high fraud score | `fraud_score >= 80` | DECLINED |
 | 11 | Decline medium fraud score | `fraud_score >= 50` | DECLINED |
 | 12 | Approve low fraud score | `fraud_score < 50` | APPROVED |
+
+---
+
+## Observability
+
+The system includes a full Grafana-based observability stack that starts alongside all other services. Everything is pre-configured — no manual setup required.
+
+### Stack
+
+| Service | Image | Port | Purpose |
+|---|---|---|---|
+| Grafana | `grafana/grafana:11.6.0` | 3003 | Visualization UI — dashboards for logs, traces, metrics |
+| Loki | `grafana/loki:3.5.0` | 3100 | Log aggregation backend |
+| Promtail | `grafana/promtail:3.5.0` | — | Collects Docker container logs and pushes to Loki |
+| Tempo | `grafana/tempo:2.7.2` | 3200 | Distributed tracing backend |
+| OTel Collector | `otel/opentelemetry-collector-contrib:0.127.0` | 4317/4318 | Receives OTLP traces/metrics, forwards to Tempo and Prometheus |
+| Prometheus | `prom/prometheus:v3.4.1` | 9090 | Metrics scraping and storage |
+| cAdvisor | `gcr.io/cadvisor/cadvisor:v0.52.1` | 8081 | Container CPU, memory, and network metrics |
+| Kafka Exporter | `danielqsj/kafka-exporter:v1.9.0` | 9308 | Exposes Kafka broker/topic/consumer-group metrics |
+
+### Dashboards
+
+Grafana is accessible at [http://localhost:3003](http://localhost:3003) (anonymous access, no login required) with six pre-provisioned dashboards:
+
+| Dashboard | Datasource | What it shows |
+|---|---|---|
+| Logs | Loki | Structured logs from all containers, filterable by container and log level |
+| Traces | Tempo | Distributed traces across microservices |
+| Request Metrics | Prometheus | HTTP request rate, latency (avg/p95), and error rate per service |
+| Kafka | Prometheus | Message throughput per topic, consumer group lag, partition offsets |
+| Container Resources | Prometheus | CPU, memory, and network I/O per Docker container (via cAdvisor) |
+| Transaction Evaluation | Tempo + Prometheus | End-to-end pipeline traces and duration histogram (p50/p95/p99) |
+
+### Instrumentation
+
+Both Go microservices are instrumented with OpenTelemetry:
+
+- HTTP tracing and metrics via Echo OTel middleware
+- Kafka produce/consume spans via otelsarama
+- DynamoDB spans via AWS SDK OTel instrumentation
+- Prometheus `/metrics` endpoint for scraping
+- Trace context propagation through HTTP headers and Kafka message headers
+
+Logs from all containers are collected automatically by Promtail (no application code changes needed).
+
+### Configuration
+
+All observability config files live under `observability/`:
+
+```
+observability/
+├── grafana/
+│   ├── grafana.ini                          # Anonymous auth, port 3000
+│   ├── provisioning/
+│   │   ├── datasources/datasources.yml      # Loki, Tempo, Prometheus
+│   │   └── dashboards/dashboards.yml        # Auto-load dashboard JSONs
+│   └── dashboards/                          # Pre-built dashboard JSON files
+├── loki/loki-config.yml
+├── tempo/tempo-config.yml
+├── otel-collector/otel-collector-config.yml
+├── prometheus/prometheus.yml
+└── promtail/promtail-config.yml
+```
+
+Configurable ports via `.env`:
+
+| Variable | Default | Service |
+|---|---|---|
+| `GRAFANA_PORT` | 3003 | Grafana |
+| `CADVISOR_PORT` | 8081 | cAdvisor |
 
 ---
 
@@ -431,6 +509,7 @@ cd ms-fraud-score && make list-scores
 | Cache | Redis 7 (Alpine) |
 | API Docs | Swagger/OpenAPI (swag + echo-swagger) |
 | Containerization | Docker + Docker Compose |
+| Observability | Grafana, Loki, Tempo, Prometheus, OpenTelemetry, cAdvisor |
 | Hot Reload | Air (Go), uvicorn --reload (Python) |
 | Linting | golangci-lint v2 (Go), ruff (Python) |
 | Testing | Go standard `testing` package, pytest + Hypothesis (Python) |
@@ -507,6 +586,17 @@ cd ms-fraud-score && make list-scores
 │   ├── Dockerfile                  # Multi-stage: node build → nginx serve
 │   ├── package.json
 │   └── vite.config.ts
+│
+├── observability/                  # Grafana observability stack configs
+│   ├── grafana/
+│   │   ├── grafana.ini             # Grafana server config (anonymous auth)
+│   │   ├── provisioning/           # Datasource and dashboard provisioning
+│   │   └── dashboards/             # Pre-built Grafana dashboard JSON files
+│   ├── loki/loki-config.yml
+│   ├── tempo/tempo-config.yml
+│   ├── otel-collector/otel-collector-config.yml
+│   ├── prometheus/prometheus.yml
+│   └── promtail/promtail-config.yml
 │
 └── docs/
     ├── images/                     # Dashboard screenshots

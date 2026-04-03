@@ -1,25 +1,25 @@
-FROM golang:1.26-bookworm
+FROM golang:1.26-bookworm AS builder
 
 WORKDIR /app
 
-# CA bundle for Netskope / corporate proxy
 COPY combined-ca-bundle.pem /usr/local/share/ca-certificates/combined-ca-bundle.crt
 RUN update-ca-certificates
 
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-
-RUN apt-get update -y && \
-    apt-get install -y git build-essential
-
-RUN go install github.com/air-verse/air@latest
-ENV PATH="/go/bin:${PATH}"
-
 COPY go.mod go.sum ./
 RUN go mod download
-RUN go mod tidy
 
 COPY . .
+RUN CGO_ENABLED=0 go build -o /app/server ./cmd/api
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /app/server /app/server
+
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 EXPOSE ${APP_PORT}
 
-ENTRYPOINT ["air", "-c", ".air.toml"]
+ENTRYPOINT ["/app/server"]

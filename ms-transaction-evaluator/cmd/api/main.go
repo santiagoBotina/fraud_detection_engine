@@ -9,6 +9,7 @@ import (
 	kafkaIn "ms-transaction-evaluator/internal/infrastructure/adapter/in/kafka"
 	dynamodbAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/aws/dynamodb"
 	kafkaAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/kafka"
+	"ms-transaction-evaluator/internal/infrastructure/telemetry"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,8 +23,12 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	echootel "github.com/labstack/echo-opentelemetry"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	echoSwagger "github.com/swaggo/echo-swagger"
+	"github.com/dnwe/otelsarama"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 )
 
 // @title Transaction Evaluator API
@@ -77,6 +82,9 @@ func main() {
 		logger.Fatal().Err(err).Msg("unable to load AWS SDK config")
 	}
 
+	// Instrument AWS SDK with OpenTelemetry
+	otelaws.AppendMiddlewares(&cfg.APIOptions)
+
 	// Initialize DynamoDB client with optional custom endpoint for local development
 	var dynamoClient *dynamodb.Client
 	endpoint := os.Getenv("DYNAMO_DB_ENDPOINT")
@@ -100,10 +108,13 @@ func main() {
 	transactionTopic := getEnvOrDefault("KAFKA_TRANSACTION_CREATED_TOPIC", "Transaction.Created")
 
 	logger.Info().Str("broker", brokerAddress).Msg("connecting to Kafka broker")
-	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
+	producerConfig := sarama.NewConfig()
+	producerConfig.Producer.Return.Successes = true
+	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, producerConfig)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to create Kafka producer")
 	}
+	producer = otelsarama.WrapSyncProducer(producerConfig, producer)
 	defer producer.Close()
 	logger.Info().Str("broker", brokerAddress).Str("topic", transactionTopic).Msg("Kafka producer connected")
 
@@ -117,6 +128,19 @@ func main() {
 	getTransactionUseCase := usecase.NewGetTransactionUseCase(transactionRepo)
 
 	e := echo.New()
+
+	// Initialize OpenTelemetry
+	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if otelEndpoint == "" {
+		otelEndpoint = "localhost:4317"
+	}
+	shutdownTelemetry, err := telemetry.Init(context.Background(), "ms-transaction-evaluator", otelEndpoint)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to initialize telemetry")
+	}
+	defer shutdownTelemetry(context.Background())
+
+	e.Use(echootel.NewMiddleware("ms-transaction-evaluator"))
 	e.Use(middleware.RequestLogger())
 
 	// CORS middleware — allow dashboard origin
@@ -136,6 +160,9 @@ func main() {
 
 	// Swagger UI
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
+
+	// Prometheus metrics endpoint
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
 	// Decision.Calculated consumer
 	decisionTopic := getEnvOrDefault("KAFKA_DECISION_CALCULATED_TOPIC", "Decision.Calculated")
@@ -158,6 +185,7 @@ func main() {
 		Msg("decision consumer group connected")
 
 	decisionConsumer := kafkaIn.NewDecisionConsumer(updateStatusUseCase, logger)
+	wrappedConsumer := otelsarama.WrapConsumerGroupHandler(decisionConsumer)
 
 	// Graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -175,7 +203,7 @@ func main() {
 	// Start decision consumer in background
 	go func() {
 		for {
-			if err := group.Consume(ctx, []string{decisionTopic}, decisionConsumer); err != nil {
+			if err := group.Consume(ctx, []string{decisionTopic}, wrappedConsumer); err != nil {
 				logger.Error().Err(err).Msg("decision consumer group error")
 			}
 			if ctx.Err() != nil {

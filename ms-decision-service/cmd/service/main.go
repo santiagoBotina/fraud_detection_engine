@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"ms-decision-service/internal/domain/usecase"
+	"ms-decision-service/internal/infrastructure/telemetry"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,9 +20,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/dnwe/otelsarama"
 	"github.com/joho/godotenv"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
+	echootel "github.com/labstack/echo-opentelemetry"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 )
 
@@ -45,6 +50,9 @@ func main() {
 		logger.Fatal().Err(err).Msg("unable to load AWS SDK config")
 	}
 	logger.Info().Str("region", getEnvOrDefault("AWS_REGION", "us-east-1")).Msg("AWS SDK config loaded")
+
+	// Instrument AWS SDK with OpenTelemetry
+	otelaws.AppendMiddlewares(&cfg.APIOptions)
 
 	// DynamoDB client
 	var dynamoClient *dynamodb.Client
@@ -73,10 +81,13 @@ func main() {
 	decisionTopic := getEnvOrDefault("KAFKA_DECISION_CALCULATED_TOPIC", "Decision.Calculated")
 
 	logger.Info().Str("broker", brokerAddress).Msg("connecting to Kafka broker")
-	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
+	producerConfig := sarama.NewConfig()
+	producerConfig.Producer.Return.Successes = true
+	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, producerConfig)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to create Kafka producer")
 	}
+	producer = otelsarama.WrapSyncProducer(producerConfig, producer)
 	defer producer.Close()
 	logger.Info().Str("broker", brokerAddress).Str("topic", decisionTopic).Msg("Kafka producer connected")
 
@@ -95,6 +106,19 @@ func main() {
 
 	// Echo HTTP server
 	e := echo.New()
+
+	// Initialize OpenTelemetry
+	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if otelEndpoint == "" {
+		otelEndpoint = "localhost:4317"
+	}
+	shutdownTelemetry, err := telemetry.Init(context.Background(), "ms-decision-service", otelEndpoint)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to initialize telemetry")
+	}
+	defer shutdownTelemetry(context.Background())
+
+	e.Use(echootel.NewMiddleware("ms-decision-service"))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:5173"},
 		AllowMethods: []string{http.MethodGet, http.MethodOptions},
@@ -103,6 +127,9 @@ func main() {
 
 	evaluationController := httpAdapter.NewEvaluationController(getRuleEvaluationsUC, listRulesUC, logger)
 	evaluationController.RegisterRoutes(e)
+
+	// Prometheus metrics endpoint
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
 	port := getEnvOrDefault("DECISION_APP_PORT", "3001")
 
@@ -125,6 +152,7 @@ func main() {
 	logger.Info().Str("group", consumerGroup).Str("broker", brokerAddress).Msg("Kafka consumer group connected")
 
 	consumer := kafkaIn.NewTransactionConsumer(evaluateUC, logger)
+	wrappedConsumer := otelsarama.WrapConsumerGroupHandler(consumer)
 
 	// Fraud score consumer group
 	fraudScoreCalculatedTopic := getEnvOrDefault("KAFKA_FRAUD_SCORE_CALCULATED_TOPIC", "FraudScore.Calculated")
@@ -139,6 +167,7 @@ func main() {
 	logger.Info().Str("group", fraudScoreConsumerGroup).Str("broker", brokerAddress).Msg("fraud score consumer group connected")
 
 	fraudScoreConsumer := kafkaIn.NewFraudScoreConsumer(evaluateFraudScoreUC, logger)
+	wrappedFraudScoreConsumer := otelsarama.WrapConsumerGroupHandler(fraudScoreConsumer)
 
 	// Graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -169,7 +198,7 @@ func main() {
 	// Start fraud score consumer in a goroutine
 	go func() {
 		for {
-			if err := fsGroup.Consume(ctx, []string{fraudScoreCalculatedTopic}, fraudScoreConsumer); err != nil {
+			if err := fsGroup.Consume(ctx, []string{fraudScoreCalculatedTopic}, wrappedFraudScoreConsumer); err != nil {
 				logger.Error().Err(err).Msg("fraud score consumer group error")
 			}
 			if ctx.Err() != nil {
@@ -180,7 +209,7 @@ func main() {
 	}()
 
 	for {
-		if err := group.Consume(ctx, []string{pendingTopic}, consumer); err != nil {
+		if err := group.Consume(ctx, []string{pendingTopic}, wrappedConsumer); err != nil {
 			logger.Error().Err(err).Msg("consumer group error")
 		}
 		if ctx.Err() != nil {

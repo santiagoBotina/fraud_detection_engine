@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: ms-transaction-evaluator
+    static_configs:
+      - targets: ["ms-transaction-evaluator:3000"]
+  - job_name: ms-decision-service
+    static_configs:
+      - targets: ["ms-decision-service:3001"]
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]

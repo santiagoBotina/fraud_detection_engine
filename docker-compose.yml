@@ -119,10 +119,13 @@ services:
       AWS_ACCESS_KEY_ID: dummy
       AWS_SECRET_ACCESS_KEY: dummy
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       kafka:
         condition: service_healthy
       dynamodb:
+        condition: service_started
+      otel-collector:
         condition: service_started
     networks:
       - local-network
@@ -149,10 +152,13 @@ services:
       AWS_ACCESS_KEY_ID: dummy
       AWS_SECRET_ACCESS_KEY: dummy
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       kafka:
         condition: service_healthy
       dynamodb:
+        condition: service_started
+      otel-collector:
         condition: service_started
     networks:
       - local-network
@@ -164,6 +170,94 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5173:80"
+    networks:
+      - local-network
+
+  loki:
+    image: grafana/loki:3.5.0
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml
+    networks:
+      - local-network
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./observability/tempo/tempo-config.yml:/etc/tempo/tempo.yaml
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    networks:
+      - local-network
+
+  promtail:
+    image: grafana/promtail:3.5.0
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["-config.file=/etc/promtail/config.yml"]
+    depends_on:
+      - loki
+    networks:
+      - local-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.127.0
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./observability/otel-collector/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml
+    depends_on:
+      - tempo
+    networks:
+      - local-network
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - local-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    ports:
+      - "${CADVISOR_PORT:-8081}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - local-network
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    ports:
+      - "9308:9308"
+    command: ["--kafka.server=kafka:29092"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - local-network
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    ports:
+      - "${GRAFANA_PORT:-3003}:3000"
+    volumes:
+      - ./observability/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
     networks:
       - local-network
 
