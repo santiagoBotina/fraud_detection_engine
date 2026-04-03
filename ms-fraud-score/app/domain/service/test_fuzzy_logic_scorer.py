@@ -5,8 +5,9 @@ Validates: Requirements 2.1, 2.2
 """
 
 from hypothesis import given, settings, strategies as st
+import pytest
 
-from app.domain.service.fuzzy_logic_scorer import FuzzyLogicScorer
+from app.domain.service.fuzzy_logic_scorer import FuzzyLogicScorer, PAYMENT_METHOD_RISK, _ip_risk_score
 
 _scorer = FuzzyLogicScorer()
 
@@ -40,10 +41,6 @@ def test_fuzzy_logic_scorer_output_range(
 # Unit tests for FuzzyLogicScorer (Task 3.3)
 # Validates: Requirements 2.2, 2.3
 # ---------------------------------------------------------------------------
-
-import pytest
-
-from app.domain.service.fuzzy_logic_scorer import PAYMENT_METHOD_RISK, _ip_risk_score
 
 
 class TestFuzzyLogicScorerSmoke:
