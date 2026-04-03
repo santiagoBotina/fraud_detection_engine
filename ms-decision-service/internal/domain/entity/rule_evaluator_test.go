@@ -77,7 +77,6 @@ func TestProperty_ConditionOperatorComparisonCorrectness(t *testing.T) {
 	properties.TestingRun(t)
 }
 
-
 // Feature: kafka-transaction-decision-service, Property 5: First-match-wins by priority
 // Validates: Requirements 4.2, 4.3
 func TestProperty_FirstMatchWinsByPriority(t *testing.T) {

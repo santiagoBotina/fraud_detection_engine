@@ -2,10 +2,9 @@ package usecase
 
 import (
 	"errors"
+	"ms-transaction-evaluator/internal/domain/entity"
 	"regexp"
 	"strings"
-
-	"ms-transaction-evaluator/internal/domain/entity"
 )
 
 var (

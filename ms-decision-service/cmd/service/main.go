@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
-	"log/slog"
+	"io"
+	"ms-decision-service/internal/domain/usecase"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"ms-decision-service/internal/domain/usecase"
 	kafkaIn "ms-decision-service/internal/infrastructure/adapter/in/kafka"
 	dynamodbAdapter "ms-decision-service/internal/infrastructure/adapter/out/aws/dynamodb"
 	kafkaOut "ms-decision-service/internal/infrastructure/adapter/out/kafka"
@@ -17,23 +17,24 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
+	"github.com/rs/zerolog"
 )
 
 func main() {
 	godotenv.Load()
 
-	logger := slog.Default()
+	logger := initLogger()
 
-	logger.Info("starting decision service")
+	logger.Info().Msg("starting decision service")
 
 	// AWS SDK config
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(getEnvOrDefault("AWS_REGION", "us-east-1")),
 	)
 	if err != nil {
-		log.Fatalf("unable to load AWS SDK config: %v", err)
+		logger.Fatal().Err(err).Msg("unable to load AWS SDK config")
 	}
-	logger.Info("AWS SDK config loaded", "region", getEnvOrDefault("AWS_REGION", "us-east-1"))
+	logger.Info().Str("region", getEnvOrDefault("AWS_REGION", "us-east-1")).Msg("AWS SDK config loaded")
 
 	// DynamoDB client
 	var dynamoClient *dynamodb.Client
@@ -43,27 +44,27 @@ func main() {
 		dynamoClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
 			o.BaseEndpoint = &endpoint
 		})
-		logger.Info("DynamoDB client initialized", "endpoint", endpoint)
+		logger.Info().Str("endpoint", endpoint).Msg("DynamoDB client initialized")
 	} else {
 		dynamoClient = dynamodb.NewFromConfig(cfg)
-		logger.Info("DynamoDB client initialized", "endpoint", "default AWS")
+		logger.Info().Str("endpoint", "default AWS").Msg("DynamoDB client initialized")
 	}
 
 	rulesTable := getEnvOrDefault("DYNAMO_DB_RULES_TABLE", "ddb-rules")
 	ruleRepo := dynamodbAdapter.NewDynamoDBRuleRepository(dynamoClient, rulesTable, logger)
-	logger.Info("rules repository initialized", "table", rulesTable)
+	logger.Info().Str("table", rulesTable).Msg("rules repository initialized")
 
 	// Kafka producer for decision results
 	brokerAddress := getEnvOrDefault("KAFKA_BROKER_ADDRESS", "localhost:9092")
 	decisionTopic := getEnvOrDefault("KAFKA_DECISION_RESULTS_TOPIC", "decision-results")
 
-	logger.Info("connecting to Kafka broker", "broker", brokerAddress)
+	logger.Info().Str("broker", brokerAddress).Msg("connecting to Kafka broker")
 	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
 	if err != nil {
-		log.Fatalf("failed to create Kafka producer: %v", err)
+		logger.Fatal().Err(err).Msg("failed to create Kafka producer")
 	}
 	defer producer.Close()
-	logger.Info("Kafka producer connected", "broker", brokerAddress, "topic", decisionTopic)
+	logger.Info().Str("broker", brokerAddress).Str("topic", decisionTopic).Msg("Kafka producer connected")
 
 	decisionPublisher := kafkaOut.NewSaramaDecisionPublisher(producer, decisionTopic, logger)
 
@@ -80,13 +81,13 @@ func main() {
 	}
 	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 
-	logger.Info("creating consumer group", "group", consumerGroup, "topic", pendingTopic)
+	logger.Info().Str("group", consumerGroup).Str("topic", pendingTopic).Msg("creating consumer group")
 	group, err := sarama.NewConsumerGroup([]string{brokerAddress}, consumerGroup, saramaConfig)
 	if err != nil {
-		log.Fatalf("failed to create consumer group: %v", err)
+		logger.Fatal().Err(err).Msg("failed to create consumer group")
 	}
 	defer group.Close()
-	logger.Info("Kafka consumer group connected", "group", consumerGroup, "broker", brokerAddress)
+	logger.Info().Str("group", consumerGroup).Str("broker", brokerAddress).Msg("Kafka consumer group connected")
 
 	consumer := kafkaIn.NewTransactionConsumer(evaluateUC, logger)
 
@@ -99,26 +100,46 @@ func main() {
 
 	go func() {
 		<-sigChan
-		logger.Info("shutting down decision service")
+		logger.Info().Msg("shutting down decision service")
 		cancel()
 	}()
 
-	logger.Info("decision service started, consuming messages",
-		"consumer_group", consumerGroup,
-		"topic", pendingTopic,
-	)
+	logger.Info().
+		Str("consumer_group", consumerGroup).
+		Str("topic", pendingTopic).
+		Msg("decision service started, consuming messages")
 
 	for {
 		if err := group.Consume(ctx, []string{pendingTopic}, consumer); err != nil {
-			logger.Error("consumer group error", "error", err)
+			logger.Error().Err(err).Msg("consumer group error")
 		}
 		if ctx.Err() != nil {
 			break
 		}
-		logger.Info("rebalancing consumer group")
+		logger.Info().Msg("rebalancing consumer group")
 	}
 
-	logger.Info("decision service stopped")
+	logger.Info().Msg("decision service stopped")
+}
+
+func initLogger() zerolog.Logger {
+	level, err := zerolog.ParseLevel(getEnvOrDefault("LOG_LEVEL", "info"))
+	if err != nil {
+		level = zerolog.InfoLevel
+	}
+
+	zerolog.SetGlobalLevel(level)
+
+	var output io.Writer = os.Stdout
+	if os.Getenv("LOG_FORMAT") == "console" {
+		output = zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+	}
+
+	return zerolog.New(output).
+		With().
+		Timestamp().
+		Str("service", "ms-decision-service").
+		Logger()
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

@@ -4,17 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
 	"ms-transaction-evaluator/internal/domain/entity"
 	"ms-transaction-evaluator/internal/domain/repository"
+	"time"
 
 	"github.com/google/uuid"
 )
 
-var (
-	ErrSaveTransactionFailed = errors.New("failed to save transaction")
-)
+var ErrSaveTransactionFailed = errors.New("failed to save transaction")
 
 type SaveTransactionUseCase struct {
 	transactionRepo repository.TransactionRepository

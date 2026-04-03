@@ -1,17 +1,19 @@
 package kafka
 
 import (
+	"bytes"
 	"context"
-	"log/slog"
+	"encoding/json"
+	"errors"
+	"ms-transaction-evaluator/internal/domain/entity"
 	"testing"
 	"time"
-
-	"ms-transaction-evaluator/internal/domain/entity"
 
 	"github.com/IBM/sarama"
 	"github.com/leanovate/gopter"
 	"github.com/leanovate/gopter/gen"
 	"github.com/leanovate/gopter/prop"
+	"github.com/rs/zerolog"
 )
 
 // capturingSyncProducer is a mock sarama.SyncProducer that captures the last sent message.
@@ -106,7 +108,7 @@ func TestProperty7_KafkaMessageKeyEqualsTransactionID(t *testing.T) {
 	properties.Property("message key equals transaction ID", prop.ForAll(
 		func(tx *entity.TransactionEntity) bool {
 			mockProducer := &capturingSyncProducer{}
-			publisher := NewSaramaTransactionPublisher(mockProducer, "test-topic", slog.Default())
+			publisher := NewSaramaTransactionPublisher(mockProducer, "test-topic", zerolog.Nop())
 
 			err := publisher.Publish(context.Background(), tx)
 			if err != nil {
@@ -128,4 +130,158 @@ func TestProperty7_KafkaMessageKeyEqualsTransactionID(t *testing.T) {
 	))
 
 	properties.TestingRun(t)
+}
+
+// failingSyncProducer is a mock sarama.SyncProducer that always returns an error from SendMessage.
+type failingSyncProducer struct {
+	err error
+}
+
+func (p *failingSyncProducer) SendMessage(_ *sarama.ProducerMessage) (int32, int64, error) {
+	return 0, 0, p.err
+}
+
+func (p *failingSyncProducer) SendMessages(_ []*sarama.ProducerMessage) error {
+	return p.err
+}
+
+func (p *failingSyncProducer) Close() error {
+	return nil
+}
+
+func (p *failingSyncProducer) IsTransactional() bool {
+	return false
+}
+
+func (p *failingSyncProducer) TxnStatus() sarama.ProducerTxnStatusFlag {
+	return sarama.ProducerTxnFlagReady
+}
+
+func (p *failingSyncProducer) BeginTxn() error {
+	return nil
+}
+
+func (p *failingSyncProducer) CommitTxn() error {
+	return nil
+}
+
+func (p *failingSyncProducer) AbortTxn() error {
+	return nil
+}
+
+func (p *failingSyncProducer) AddOffsetsToTxn(_ map[string][]*sarama.PartitionOffsetMetadata, _ string) error {
+	return nil
+}
+
+func (p *failingSyncProducer) AddMessageToTxn(_ *sarama.ConsumerMessage, _ string, _ *string) error {
+	return nil
+}
+
+// Feature: zerolog-logging-refactor, Property 1: Structured log field preservation
+// **Validates: Requirements 5.1, 5.3**
+func TestProperty1_StructuredLogFieldPreservation(t *testing.T) {
+	parameters := gopter.DefaultTestParameters()
+	parameters.MinSuccessfulTests = 100
+
+	t.Run("success path contains all expected fields", func(t *testing.T) {
+		properties := gopter.NewProperties(parameters)
+
+		properties.Property("success log lines contain transaction_id, topic, status, partition, offset", prop.ForAll(
+			func(tx *entity.TransactionEntity) bool {
+				var buf bytes.Buffer
+				logger := zerolog.New(&buf)
+
+				mockProducer := &capturingSyncProducer{}
+				publisher := NewSaramaTransactionPublisher(mockProducer, "test-topic", logger)
+
+				err := publisher.Publish(context.Background(), tx)
+				if err != nil {
+					return false
+				}
+
+				// Parse the last JSON log line (the "published" success message)
+				lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+				if len(lines) == 0 {
+					return false
+				}
+
+				lastLine := lines[len(lines)-1]
+				var fields map[string]interface{}
+				if jsonErr := json.Unmarshal(lastLine, &fields); jsonErr != nil {
+					return false
+				}
+
+				requiredFields := []string{"transaction_id", "topic", "partition", "offset"}
+				for _, f := range requiredFields {
+					if _, ok := fields[f]; !ok {
+						return false
+					}
+				}
+
+				// Also check the first log line has status (the "publishing" message)
+				firstLine := lines[0]
+				var firstFields map[string]interface{}
+				if jsonErr := json.Unmarshal(firstLine, &firstFields); jsonErr != nil {
+					return false
+				}
+
+				if _, ok := firstFields["status"]; !ok {
+					return false
+				}
+
+				return true
+			},
+			genTransactionEntity(),
+		))
+
+		properties.TestingRun(t)
+	})
+
+	t.Run("error path contains error field", func(t *testing.T) {
+		properties := gopter.NewProperties(parameters)
+
+		properties.Property("error log lines contain error field", prop.ForAll(
+			func(tx *entity.TransactionEntity) bool {
+				var buf bytes.Buffer
+				logger := zerolog.New(&buf)
+
+				mockProducer := &failingSyncProducer{err: errors.New("kafka send failed")}
+				publisher := NewSaramaTransactionPublisher(mockProducer, "test-topic", logger)
+
+				err := publisher.Publish(context.Background(), tx)
+				if err == nil {
+					return false
+				}
+
+				lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
+				if len(lines) == 0 {
+					return false
+				}
+
+				// Find the error log line (last line should be the error)
+				lastLine := lines[len(lines)-1]
+				var fields map[string]interface{}
+				if jsonErr := json.Unmarshal(lastLine, &fields); jsonErr != nil {
+					return false
+				}
+
+				if _, ok := fields["error"]; !ok {
+					return false
+				}
+
+				if _, ok := fields["transaction_id"]; !ok {
+					return false
+				}
+
+				if _, ok := fields["topic"]; !ok {
+					return false
+				}
+
+				return true
+			},
+			genTransactionEntity(),
+		))
+
+		properties.TestingRun(t)
+	})
 }

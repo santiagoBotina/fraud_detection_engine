@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-
 	"ms-decision-service/internal/domain/entity"
 	"ms-decision-service/internal/domain/repository"
 )
@@ -36,7 +35,7 @@ func (uc *EvaluateTransactionUseCase) Execute(
 
 	rules, err := uc.ruleRepo.FindActiveRulesSortedByPriority(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrRuleRetrievalFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrRuleRetrievalFailed, err)
 	}
 
 	status := entity.EvaluateRules(transaction, rules)
@@ -47,7 +46,7 @@ func (uc *EvaluateTransactionUseCase) Execute(
 	}
 
 	if err := uc.decisionPublisher.Publish(ctx, result); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrDecisionPublishFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrDecisionPublishFailed, err)
 	}
 
 	return result, nil

@@ -3,15 +3,14 @@ package dynamodb
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"sort"
-
 	"ms-decision-service/internal/domain/entity"
+	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/rs/zerolog"
 )
 
 type ruleItem struct {
@@ -29,17 +28,21 @@ type ruleItem struct {
 type DynamoDBRuleRepository struct {
 	client    *dynamodb.Client
 	tableName string
-	logger    *slog.Logger
+	logger    zerolog.Logger
 }
 
 // NewDynamoDBRuleRepository creates a new DynamoDB-backed rule repository.
-func NewDynamoDBRuleRepository(client *dynamodb.Client, tableName string, logger *slog.Logger) *DynamoDBRuleRepository {
+func NewDynamoDBRuleRepository(
+	client *dynamodb.Client,
+	tableName string,
+	logger zerolog.Logger,
+) *DynamoDBRuleRepository {
 	return &DynamoDBRuleRepository{client: client, tableName: tableName, logger: logger}
 }
 
 // FindActiveRulesSortedByPriority scans the rules table for active rules and sorts by priority ascending.
 func (r *DynamoDBRuleRepository) FindActiveRulesSortedByPriority(ctx context.Context) ([]entity.Rule, error) {
-	r.logger.Info("scanning rules table for active rules", "table", r.tableName)
+	r.logger.Info().Str("table", r.tableName).Msg("scanning rules table for active rules")
 
 	input := &dynamodb.ScanInput{
 		TableName:        aws.String(r.tableName),
@@ -51,20 +54,14 @@ func (r *DynamoDBRuleRepository) FindActiveRulesSortedByPriority(ctx context.Con
 
 	result, err := r.client.Scan(ctx, input)
 	if err != nil {
-		r.logger.Error("failed to scan rules table",
-			"error", err,
-			"table", r.tableName,
-		)
+		r.logger.Error().Err(err).Str("table", r.tableName).Msg("failed to scan rules table")
 		return nil, fmt.Errorf("failed to scan rules table: %w", err)
 	}
 
 	var items []ruleItem
 	if err := attributevalue.UnmarshalListOfMaps(result.Items, &items); err != nil {
-		r.logger.Error("failed to unmarshal rules",
-			"error", err,
-			"table", r.tableName,
-			"item_count", len(result.Items),
-		)
+		r.logger.Error().Err(err).Str("table", r.tableName).
+			Int("item_count", len(result.Items)).Msg("failed to unmarshal rules")
 		return nil, fmt.Errorf("failed to unmarshal rules: %w", err)
 	}
 
@@ -86,10 +83,7 @@ func (r *DynamoDBRuleRepository) FindActiveRulesSortedByPriority(ctx context.Con
 		return rules[i].Priority < rules[j].Priority
 	})
 
-	r.logger.Info("active rules loaded",
-		"table", r.tableName,
-		"active_count", len(rules),
-	)
+	r.logger.Info().Str("table", r.tableName).Int("active_count", len(rules)).Msg("active rules loaded")
 
 	return rules, nil
 }

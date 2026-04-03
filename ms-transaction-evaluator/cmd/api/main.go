@@ -2,14 +2,14 @@ package main
 
 import (
 	"context"
-	"log"
-	"log/slog"
+	"io"
 	_ "ms-transaction-evaluator/docs"
 	"ms-transaction-evaluator/internal/domain/usecase"
 	httpAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/in/http"
 	dynamodbAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/aws/dynamodb"
 	kafkaAdapter "ms-transaction-evaluator/internal/infrastructure/adapter/out/kafka"
 	"os"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -17,6 +17,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/rs/zerolog"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -38,16 +39,32 @@ import (
 func main() {
 	godotenv.Load()
 
-	logger := slog.Default()
+	// Parse log level from environment, default to info
+	level, err := zerolog.ParseLevel(getEnvOrDefault("LOG_LEVEL", "info"))
+	if err != nil {
+		level = zerolog.InfoLevel
+	}
+	zerolog.SetGlobalLevel(level)
 
-	logger.Info("starting transaction evaluator")
+	var output io.Writer = os.Stdout
+	if os.Getenv("LOG_FORMAT") == "console" {
+		output = zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+	}
+
+	logger := zerolog.New(output).
+		With().
+		Timestamp().
+		Str("service", "ms-transaction-evaluator").
+		Logger()
+
+	logger.Info().Msg("starting transaction evaluator")
 
 	// Initialize AWS SDK
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(getEnvOrDefault("AWS_REGION", "us-east-1")),
 	)
 	if err != nil {
-		log.Fatalf("unable to load AWS SDK config: %v", err)
+		logger.Fatal().Err(err).Msg("unable to load AWS SDK config")
 	}
 
 	// Initialize DynamoDB client with optional custom endpoint for local development
@@ -56,29 +73,29 @@ func main() {
 	tableName := os.Getenv("DYNAMO_DB_TRANSACTIONS_TABLE")
 
 	if endpoint != "" {
-		logger.Info("using custom DynamoDB endpoint", "endpoint", endpoint)
+		logger.Info().Str("endpoint", endpoint).Msg("using custom DynamoDB endpoint")
 		dynamoClient = dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
 			o.BaseEndpoint = &endpoint
 		})
 	} else {
-		logger.Info("using default AWS DynamoDB endpoint")
+		logger.Info().Msg("using default AWS DynamoDB endpoint")
 		dynamoClient = dynamodb.NewFromConfig(cfg)
 	}
 
 	transactionRepo := dynamodbAdapter.NewDynamoDBTransactionRepository(dynamoClient, tableName, logger)
-	logger.Info("DynamoDB repository initialized", "table", tableName)
+	logger.Info().Str("table", tableName).Msg("DynamoDB repository initialized")
 
 	// Initialize Kafka producer
 	brokerAddress := getEnvOrDefault("KAFKA_BROKER_ADDRESS", "localhost:9092")
 	transactionTopic := getEnvOrDefault("KAFKA_TRANSACTION_PENDING_TOPIC", "transaction-pending")
 
-	logger.Info("connecting to Kafka broker", "broker", brokerAddress)
+	logger.Info().Str("broker", brokerAddress).Msg("connecting to Kafka broker")
 	producer, err := sarama.NewSyncProducer([]string{brokerAddress}, nil)
 	if err != nil {
-		log.Fatalf("failed to create Kafka producer: %v", err)
+		logger.Fatal().Err(err).Msg("failed to create Kafka producer")
 	}
 	defer producer.Close()
-	logger.Info("Kafka producer connected", "broker", brokerAddress, "topic", transactionTopic)
+	logger.Info().Str("broker", brokerAddress).Str("topic", transactionTopic).Msg("Kafka producer connected")
 
 	eventPublisher := kafkaAdapter.NewSaramaTransactionPublisher(producer, transactionTopic, logger)
 
@@ -101,7 +118,7 @@ func main() {
 	port := os.Getenv("EVALUATOR_APP_PORT")
 
 	if err := e.Start(":" + port); err != nil {
-		e.Logger.Error("failed to start server", "error", err)
+		logger.Fatal().Err(err).Msg("failed to start server")
 	}
 }
 

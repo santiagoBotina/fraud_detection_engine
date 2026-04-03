@@ -1,9 +1,9 @@
 package usecase
 
 import (
-	"testing"
-
+	"errors"
 	"ms-transaction-evaluator/internal/domain/entity"
+	"testing"
 )
 
 func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
@@ -27,7 +27,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 			CustomerInfo:  createValidCustomerInfo(),
 		}
 		err := uc.Execute(req)
-		if err != ErrAmountRequired {
+		if !errors.Is(err, ErrAmountRequired) {
 			t.Errorf("Expected ErrAmountRequired, got: %v", err)
 		}
 	})
@@ -40,7 +40,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 			CustomerInfo:  createValidCustomerInfo(),
 		}
 		err := uc.Execute(req)
-		if err != ErrAmountMustBePositive {
+		if !errors.Is(err, ErrAmountMustBePositive) {
 			t.Errorf("Expected ErrAmountMustBePositive, got: %v", err)
 		}
 	})
@@ -53,7 +53,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 			CustomerInfo:  createValidCustomerInfo(),
 		}
 		err := uc.Execute(req)
-		if err != ErrCurrencyRequired {
+		if !errors.Is(err, ErrCurrencyRequired) {
 			t.Errorf("Expected ErrCurrencyRequired, got: %v", err)
 		}
 	})
@@ -66,7 +66,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 			CustomerInfo:  createValidCustomerInfo(),
 		}
 		err := uc.Execute(req)
-		if err != ErrCurrencyInvalid {
+		if !errors.Is(err, ErrCurrencyInvalid) {
 			t.Errorf("Expected ErrCurrencyInvalid, got: %v", err)
 		}
 	})
@@ -106,7 +106,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 			CustomerInfo:  createValidCustomerInfo(),
 		}
 		err := uc.Execute(req)
-		if err != ErrPaymentMethodRequired {
+		if !errors.Is(err, ErrPaymentMethodRequired) {
 			t.Errorf("Expected ErrPaymentMethodRequired, got: %v", err)
 		}
 	})
@@ -119,7 +119,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 			CustomerInfo:  createValidCustomerInfo(),
 		}
 		err := uc.Execute(req)
-		if err != ErrPaymentMethodInvalid {
+		if !errors.Is(err, ErrPaymentMethodInvalid) {
 			t.Errorf("Expected ErrPaymentMethodInvalid, got: %v", err)
 		}
 	})
@@ -155,7 +155,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.CustomerID = ""
 		err := uc.Execute(req)
-		if err != ErrCustomerIDRequired {
+		if !errors.Is(err, ErrCustomerIDRequired) {
 			t.Errorf("Expected ErrCustomerIDRequired, got: %v", err)
 		}
 	})
@@ -164,7 +164,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.CustomerID = "   "
 		err := uc.Execute(req)
-		if err != ErrCustomerIDRequired {
+		if !errors.Is(err, ErrCustomerIDRequired) {
 			t.Errorf("Expected ErrCustomerIDRequired, got: %v", err)
 		}
 	})
@@ -173,7 +173,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Name = ""
 		err := uc.Execute(req)
-		if err != ErrCustomerNameRequired {
+		if !errors.Is(err, ErrCustomerNameRequired) {
 			t.Errorf("Expected ErrCustomerNameRequired, got: %v", err)
 		}
 	})
@@ -182,7 +182,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Name = "   "
 		err := uc.Execute(req)
-		if err != ErrCustomerNameRequired {
+		if !errors.Is(err, ErrCustomerNameRequired) {
 			t.Errorf("Expected ErrCustomerNameRequired, got: %v", err)
 		}
 	})
@@ -191,7 +191,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Email = ""
 		err := uc.Execute(req)
-		if err != ErrCustomerEmailRequired {
+		if !errors.Is(err, ErrCustomerEmailRequired) {
 			t.Errorf("Expected ErrCustomerEmailRequired, got: %v", err)
 		}
 	})
@@ -200,7 +200,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Email = "   "
 		err := uc.Execute(req)
-		if err != ErrCustomerEmailRequired {
+		if !errors.Is(err, ErrCustomerEmailRequired) {
 			t.Errorf("Expected ErrCustomerEmailRequired, got: %v", err)
 		}
 	})
@@ -209,7 +209,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Email = "invalidemail.com"
 		err := uc.Execute(req)
-		if err != ErrCustomerEmailInvalid {
+		if !errors.Is(err, ErrCustomerEmailInvalid) {
 			t.Errorf("Expected ErrCustomerEmailInvalid, got: %v", err)
 		}
 	})
@@ -218,7 +218,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Email = "invalid@"
 		err := uc.Execute(req)
-		if err != ErrCustomerEmailInvalid {
+		if !errors.Is(err, ErrCustomerEmailInvalid) {
 			t.Errorf("Expected ErrCustomerEmailInvalid, got: %v", err)
 		}
 	})
@@ -227,7 +227,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Email = "invalid@domain"
 		err := uc.Execute(req)
-		if err != ErrCustomerEmailInvalid {
+		if !errors.Is(err, ErrCustomerEmailInvalid) {
 			t.Errorf("Expected ErrCustomerEmailInvalid, got: %v", err)
 		}
 	})
@@ -255,7 +255,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Phone = ""
 		err := uc.Execute(req)
-		if err != ErrCustomerPhoneRequired {
+		if !errors.Is(err, ErrCustomerPhoneRequired) {
 			t.Errorf("Expected ErrCustomerPhoneRequired, got: %v", err)
 		}
 	})
@@ -264,7 +264,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.Phone = "   "
 		err := uc.Execute(req)
-		if err != ErrCustomerPhoneRequired {
+		if !errors.Is(err, ErrCustomerPhoneRequired) {
 			t.Errorf("Expected ErrCustomerPhoneRequired, got: %v", err)
 		}
 	})
@@ -273,7 +273,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.IpAddress = ""
 		err := uc.Execute(req)
-		if err != ErrCustomerIPRequired {
+		if !errors.Is(err, ErrCustomerIPRequired) {
 			t.Errorf("Expected ErrCustomerIPRequired, got: %v", err)
 		}
 	})
@@ -282,7 +282,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 		req := createValidRequest()
 		req.CustomerInfo.IpAddress = "   "
 		err := uc.Execute(req)
-		if err != ErrCustomerIPRequired {
+		if !errors.Is(err, ErrCustomerIPRequired) {
 			t.Errorf("Expected ErrCustomerIPRequired, got: %v", err)
 		}
 	})
@@ -308,7 +308,7 @@ func TestValidateCreateTransactionPayloadUseCase_Execute(t *testing.T) {
 func TestValidateCustomerInfo(t *testing.T) {
 	t.Run("should return error when customer info is nil", func(t *testing.T) {
 		err := validateCustomerInfo(nil)
-		if err != ErrCustomerRequired {
+		if !errors.Is(err, ErrCustomerRequired) {
 			t.Errorf("Expected ErrCustomerRequired, got: %v", err)
 		}
 	})

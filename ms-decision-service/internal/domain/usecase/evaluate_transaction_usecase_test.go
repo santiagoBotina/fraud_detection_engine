@@ -3,10 +3,9 @@ package usecase
 import (
 	"context"
 	"errors"
+	"ms-decision-service/internal/domain/entity"
 	"testing"
 	"time"
-
-	"ms-decision-service/internal/domain/entity"
 )
 
 // --- Hand-written mocks ---
@@ -58,13 +57,13 @@ func newTestTransaction() *entity.TransactionMessage {
 
 func TestEvaluateTransactionUseCase_Execute(t *testing.T) {
 	tests := []struct {
-		name            string
-		transaction     *entity.TransactionMessage
-		ruleRepo        *mockRuleRepository
-		publisher       *mockDecisionPublisher
-		wantErr         error
-		wantStatus      entity.DecisionStatus
-		wantPublished   bool
+		name          string
+		transaction   *entity.TransactionMessage
+		ruleRepo      *mockRuleRepository
+		publisher     *mockDecisionPublisher
+		wantErr       error
+		wantStatus    entity.DecisionStatus
+		wantPublished bool
 	}{
 		{
 			name:        "nil transaction returns ErrTransactionNil",

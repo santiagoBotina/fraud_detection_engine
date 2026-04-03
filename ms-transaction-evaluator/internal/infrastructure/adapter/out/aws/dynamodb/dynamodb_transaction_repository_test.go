@@ -1,10 +1,9 @@
 package dynamodb
 
 import (
+	"ms-transaction-evaluator/internal/domain/entity"
 	"testing"
 	"time"
-
-	"ms-transaction-evaluator/internal/domain/entity"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 )

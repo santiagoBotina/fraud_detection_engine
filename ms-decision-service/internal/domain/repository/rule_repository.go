@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-
 	"ms-decision-service/internal/domain/entity"
 )
 

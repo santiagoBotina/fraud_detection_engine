@@ -4,34 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-
 	"ms-transaction-evaluator/internal/domain/entity"
 
 	"github.com/IBM/sarama"
+	"github.com/rs/zerolog"
 )
 
 type SaramaTransactionPublisher struct {
 	producer sarama.SyncProducer
 	topic    string
-	logger   *slog.Logger
+	logger   zerolog.Logger
 }
 
-func NewSaramaTransactionPublisher(producer sarama.SyncProducer, topic string, logger *slog.Logger) *SaramaTransactionPublisher {
+func NewSaramaTransactionPublisher(producer sarama.SyncProducer, topic string, logger zerolog.Logger) *SaramaTransactionPublisher {
 	return &SaramaTransactionPublisher{producer: producer, topic: topic, logger: logger}
 }
 
 func (p *SaramaTransactionPublisher) Publish(_ context.Context, transaction *entity.TransactionEntity) error {
-	p.logger.Info("publishing transaction to Kafka",
-		"transaction_id", transaction.ID,
-		"topic", p.topic,
-		"status", transaction.Status,
-		"amount_in_cents", transaction.AmountInCents,
-	)
+	p.logger.Info().
+		Str("transaction_id", transaction.ID).
+		Str("topic", p.topic).
+		Str("status", string(transaction.Status)).
+		Int64("amount_in_cents", transaction.AmountInCents).
+		Msg("publishing transaction to Kafka")
 
 	payload, err := json.Marshal(transaction)
 	if err != nil {
-		p.logger.Error("failed to marshal transaction", "error", err, "transaction_id", transaction.ID)
+		p.logger.Error().Err(err).Str("transaction_id", transaction.ID).Msg("failed to marshal transaction")
 		return fmt.Errorf("failed to marshal transaction: %w", err)
 	}
 
@@ -43,20 +42,20 @@ func (p *SaramaTransactionPublisher) Publish(_ context.Context, transaction *ent
 
 	partition, offset, err := p.producer.SendMessage(msg)
 	if err != nil {
-		p.logger.Error("failed to publish transaction message",
-			"error", err,
-			"transaction_id", transaction.ID,
-			"topic", p.topic,
-		)
+		p.logger.Error().
+			Err(err).
+			Str("transaction_id", transaction.ID).
+			Str("topic", p.topic).
+			Msg("failed to publish transaction message")
 		return fmt.Errorf("failed to publish transaction message: %w", err)
 	}
 
-	p.logger.Info("transaction published to Kafka",
-		"transaction_id", transaction.ID,
-		"topic", p.topic,
-		"partition", partition,
-		"offset", offset,
-	)
+	p.logger.Info().
+		Str("transaction_id", transaction.ID).
+		Str("topic", p.topic).
+		Int32("partition", partition).
+		Int64("offset", offset).
+		Msg("transaction published to Kafka")
 
 	return nil
 }

@@ -2,22 +2,21 @@ package http
 
 import (
 	"errors"
-	"log/slog"
-	"net/http"
-
 	"ms-transaction-evaluator/internal/domain/entity"
 	"ms-transaction-evaluator/internal/domain/usecase"
+	"net/http"
 
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog"
 )
 
 type TransactionController struct {
 	validateUseCase *usecase.ValidateCreateTransactionPayloadUseCase
 	saveUseCase     *usecase.SaveTransactionUseCase
-	logger          *slog.Logger
+	logger          zerolog.Logger
 }
 
-func NewTransactionController(validateUseCase *usecase.ValidateCreateTransactionPayloadUseCase, saveUseCase *usecase.SaveTransactionUseCase, logger *slog.Logger) *TransactionController {
+func NewTransactionController(validateUseCase *usecase.ValidateCreateTransactionPayloadUseCase, saveUseCase *usecase.SaveTransactionUseCase, logger zerolog.Logger) *TransactionController {
 	return &TransactionController{
 		validateUseCase: validateUseCase,
 		saveUseCase:     saveUseCase,
@@ -38,27 +37,27 @@ func NewTransactionController(validateUseCase *usecase.ValidateCreateTransaction
 func (tc *TransactionController) EvaluateTransaction(c *echo.Context) error {
 	var req entity.EvaluateTransactionRequest
 
-	tc.logger.Info("received evaluate transaction request")
+	tc.logger.Info().Msg("received evaluate transaction request")
 
 	// Bind the request body to the struct
 	if err := c.Bind(&req); err != nil {
-		tc.logger.Error("failed to bind request body", "error", err)
+		tc.logger.Error().Err(err).Msg("failed to bind request body")
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid request body",
 			Details: err.Error(),
 		})
 	}
 
-	tc.logger.Info("request parsed",
-		"amount_in_cents", req.AmountInCents,
-		"currency", req.Currency,
-		"payment_method", req.PaymentMethod,
-		"customer_id", req.CustomerInfo.CustomerID,
-	)
+	tc.logger.Info().
+		Int64("amount_in_cents", req.AmountInCents).
+		Str("currency", string(req.Currency)).
+		Str("payment_method", string(req.PaymentMethod)).
+		Str("customer_id", req.CustomerInfo.CustomerID).
+		Msg("request parsed")
 
 	// Validate the request
 	if err := tc.validateUseCase.Execute(&req); err != nil {
-		tc.logger.Warn("validation failed", "error", err)
+		tc.logger.Warn().Err(err).Msg("validation failed")
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Validation failed",
 			Details: err.Error(),
@@ -69,26 +68,24 @@ func (tc *TransactionController) EvaluateTransaction(c *echo.Context) error {
 	transaction, err := tc.saveUseCase.Execute(c.Request().Context(), &req)
 	if err != nil {
 		if errors.Is(err, usecase.ErrEventPublishFailed) {
-			tc.logger.Error("transaction saved but Kafka publish failed",
-				"error", err,
-			)
+			tc.logger.Error().Err(err).Msg("transaction saved but Kafka publish failed")
 			return c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error:   "Transaction saved but event publish failed",
 				Details: err.Error(),
 			})
 		}
 
-		tc.logger.Error("failed to save transaction", "error", err)
+		tc.logger.Error().Err(err).Msg("failed to save transaction")
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "Failed to save transaction",
 			Details: err.Error(),
 		})
 	}
 
-	tc.logger.Info("transaction processed successfully",
-		"transaction_id", transaction.ID,
-		"status", transaction.Status,
-	)
+	tc.logger.Info().
+		Str("transaction_id", transaction.ID).
+		Str("status", string(transaction.Status)).
+		Msg("transaction processed successfully")
 
 	// Return success with the saved transaction
 	return c.JSON(http.StatusOK, SuccessResponse{

@@ -3,15 +3,14 @@ package kafka
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
-	"testing"
-	"time"
-
 	"ms-decision-service/internal/domain/entity"
 	"ms-decision-service/internal/domain/repository"
 	"ms-decision-service/internal/domain/usecase"
+	"testing"
+	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/rs/zerolog"
 )
 
 // --- Mock RuleRepository ---
@@ -48,13 +47,13 @@ type mockConsumerGroupSession struct {
 	markedMessages []*sarama.ConsumerMessage
 }
 
-func (m *mockConsumerGroupSession) Claims() map[string][]int32          { return nil }
-func (m *mockConsumerGroupSession) MemberID() string                    { return "test-member" }
-func (m *mockConsumerGroupSession) GenerationID() int32                 { return 1 }
-func (m *mockConsumerGroupSession) MarkOffset(string, int32, int64, string) {}
-func (m *mockConsumerGroupSession) Commit()                             {}
+func (m *mockConsumerGroupSession) Claims() map[string][]int32               { return nil }
+func (m *mockConsumerGroupSession) MemberID() string                         { return "test-member" }
+func (m *mockConsumerGroupSession) GenerationID() int32                      { return 1 }
+func (m *mockConsumerGroupSession) MarkOffset(string, int32, int64, string)  {}
+func (m *mockConsumerGroupSession) Commit()                                  {}
 func (m *mockConsumerGroupSession) ResetOffset(string, int32, int64, string) {}
-func (m *mockConsumerGroupSession) Context() context.Context            { return context.Background() }
+func (m *mockConsumerGroupSession) Context() context.Context                 { return context.Background() }
 
 func (m *mockConsumerGroupSession) MarkMessage(msg *sarama.ConsumerMessage, _ string) {
 	m.markedMessages = append(m.markedMessages, msg)
@@ -66,10 +65,10 @@ type mockConsumerGroupClaim struct {
 	messages chan *sarama.ConsumerMessage
 }
 
-func (m *mockConsumerGroupClaim) Topic() string             { return "test-topic" }
-func (m *mockConsumerGroupClaim) Partition() int32          { return 0 }
-func (m *mockConsumerGroupClaim) InitialOffset() int64      { return 0 }
-func (m *mockConsumerGroupClaim) HighWaterMarkOffset() int64 { return 0 }
+func (m *mockConsumerGroupClaim) Topic() string                            { return "test-topic" }
+func (m *mockConsumerGroupClaim) Partition() int32                         { return 0 }
+func (m *mockConsumerGroupClaim) InitialOffset() int64                     { return 0 }
+func (m *mockConsumerGroupClaim) HighWaterMarkOffset() int64               { return 0 }
 func (m *mockConsumerGroupClaim) Messages() <-chan *sarama.ConsumerMessage { return m.messages }
 
 // --- Helper ---
@@ -101,7 +100,7 @@ func TestConsumeClaim_ValidMessage(t *testing.T) {
 	ruleRepo := &mockRuleRepository{}
 	publisher := &mockDecisionPublisher{}
 	uc := buildUseCase(ruleRepo, publisher)
-	logger := slog.Default()
+	logger := zerolog.Nop()
 
 	consumer := NewTransactionConsumer(uc, logger)
 
@@ -134,7 +133,7 @@ func TestConsumeClaim_MalformedJSON(t *testing.T) {
 	ruleRepo := &mockRuleRepository{}
 	publisher := &mockDecisionPublisher{}
 	uc := buildUseCase(ruleRepo, publisher)
-	logger := slog.Default()
+	logger := zerolog.Nop()
 
 	consumer := NewTransactionConsumer(uc, logger)
 
@@ -169,7 +168,7 @@ func TestConsumeClaim_UseCaseError(t *testing.T) {
 	}
 	publisher := &mockDecisionPublisher{}
 	uc := buildUseCase(ruleRepo, publisher)
-	logger := slog.Default()
+	logger := zerolog.Nop()
 
 	consumer := NewTransactionConsumer(uc, logger)
 

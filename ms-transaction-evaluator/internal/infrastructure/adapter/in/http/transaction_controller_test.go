@@ -3,16 +3,15 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
+	"ms-transaction-evaluator/internal/domain/entity"
+	"ms-transaction-evaluator/internal/domain/usecase"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"ms-transaction-evaluator/internal/domain/entity"
-	"ms-transaction-evaluator/internal/domain/usecase"
-
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog"
 )
 
 type mockTransactionRepository struct{}
@@ -33,7 +32,7 @@ func TestTransactionController_EvaluateTransaction(t *testing.T) {
 	mockRepo := &mockTransactionRepository{}
 	mockPub := &mockEventPublisher{}
 	saveUseCase := usecase.NewSaveTransactionUseCase(mockRepo, mockPub)
-	controller := NewTransactionController(validateUseCase, saveUseCase, slog.Default())
+	controller := NewTransactionController(validateUseCase, saveUseCase, zerolog.Nop())
 	e := echo.New()
 
 	t.Run("should return 200 with valid transaction request", func(t *testing.T) {

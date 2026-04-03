@@ -1,9 +1,8 @@
 package dynamodb
 
 import (
-	"testing"
-
 	"ms-decision-service/internal/domain/entity"
+	"testing"
 
 	"github.com/leanovate/gopter"
 	"github.com/leanovate/gopter/gen"

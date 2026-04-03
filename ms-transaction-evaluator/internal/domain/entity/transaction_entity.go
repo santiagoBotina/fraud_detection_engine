@@ -18,6 +18,7 @@ type CustomerInfo struct {
 }
 
 type Currency string
+
 const (
 	USD Currency = "USD"
 	COP Currency = "COP"
@@ -25,6 +26,7 @@ const (
 )
 
 type PaymentMethod string
+
 const (
 	CARD          PaymentMethod = "CARD"
 	BANK_TRANSFER PaymentMethod = "BANK_TRANSFER"
@@ -32,6 +34,7 @@ const (
 )
 
 type TransactionStatus string
+
 const (
 	PENDING   TransactionStatus = "PENDING"
 	APPROVED  TransactionStatus = "APPROVED"
@@ -41,16 +44,16 @@ const (
 )
 
 type TransactionEntity struct {
-	ID                string        `json:"id"`
-	AmountInCents     int64         `json:"amount_in_cents"`
-	Currency          Currency      `json:"currency"`
-	PaymentMethod     PaymentMethod `json:"payment_method"`
-	CustomerID        string        `json:"customer_id"`
-	CustomerName      string        `json:"customer_name"`
-	CustomerEmail     string        `json:"customer_email"`
-	CustomerPhone     string        `json:"customer_phone"`
-	CustomerIPAddress string        `json:"customer_ip_address"`
+	ID                string            `json:"id"`
+	AmountInCents     int64             `json:"amount_in_cents"`
+	Currency          Currency          `json:"currency"`
+	PaymentMethod     PaymentMethod     `json:"payment_method"`
+	CustomerID        string            `json:"customer_id"`
+	CustomerName      string            `json:"customer_name"`
+	CustomerEmail     string            `json:"customer_email"`
+	CustomerPhone     string            `json:"customer_phone"`
+	CustomerIPAddress string            `json:"customer_ip_address"`
 	Status            TransactionStatus `json:"status"`
-	CreatedAt         time.Time     `json:"created_at"`
-	UpdatedAt         time.Time     `json:"updated_at"`
+	CreatedAt         time.Time         `json:"created_at"`
+	UpdatedAt         time.Time         `json:"updated_at"`
 }

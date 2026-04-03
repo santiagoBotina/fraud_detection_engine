@@ -3,9 +3,8 @@ package usecase
 import (
 	"context"
 	"errors"
-	"testing"
-
 	"ms-transaction-evaluator/internal/domain/entity"
+	"testing"
 )
 
 type mockTransactionRepository struct {
