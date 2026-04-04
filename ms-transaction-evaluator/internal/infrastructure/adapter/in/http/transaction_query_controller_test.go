@@ -25,7 +25,7 @@ func (m *mockQueryTransactionRepository) Save(_ context.Context, _ *entity.Trans
 	return nil
 }
 
-func (m *mockQueryTransactionRepository) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+func (m *mockQueryTransactionRepository) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus, _ *time.Time) error {
 	return nil
 }
 
@@ -41,6 +41,10 @@ func (m *mockQueryTransactionRepository) FindAllPaginated(ctx context.Context, l
 		return m.findAllPaginatedFunc(ctx, limit, cursor)
 	}
 	return nil, "", nil
+}
+
+func (m *mockQueryTransactionRepository) FindAll(_ context.Context) ([]entity.TransactionEntity, error) {
+	return nil, nil
 }
 
 func sampleTransaction() entity.TransactionEntity {
@@ -98,12 +102,8 @@ func TestTransactionQueryController_ListTransactions(t *testing.T) {
 			t.Errorf("expected next_cursor %q, got %q", "next123", resp.NextCursor)
 		}
 
-		data, ok := resp.Data.([]interface{})
-		if !ok {
-			t.Fatalf("expected data to be an array, got %T", resp.Data)
-		}
-		if len(data) != 1 {
-			t.Errorf("expected 1 transaction, got %d", len(data))
+		if len(resp.Data) != 1 {
+			t.Errorf("expected 1 transaction, got %d", len(resp.Data))
 		}
 	})
 
@@ -132,12 +132,8 @@ func TestTransactionQueryController_ListTransactions(t *testing.T) {
 			t.Errorf("expected empty next_cursor, got %q", resp.NextCursor)
 		}
 
-		data, ok := resp.Data.([]interface{})
-		if !ok {
-			t.Fatalf("expected data to be an array, got %T", resp.Data)
-		}
-		if len(data) != 0 {
-			t.Errorf("expected 0 transactions, got %d", len(data))
+		if len(resp.Data) != 0 {
+			t.Errorf("expected 0 transactions, got %d", len(resp.Data))
 		}
 	})
 
@@ -261,17 +257,8 @@ func TestTransactionQueryController_GetTransaction(t *testing.T) {
 			t.Fatalf("failed to unmarshal response: %v", err)
 		}
 
-		if resp.Data == nil {
-			t.Fatal("expected data in response, got nil")
-		}
-
-		dataMap, ok := resp.Data.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected data to be a map, got %T", resp.Data)
-		}
-
-		if dataMap["id"] != "txn_abc123" {
-			t.Errorf("expected id %q, got %q", "txn_abc123", dataMap["id"])
+		if resp.Data.ID != "txn_abc123" {
+			t.Errorf("expected id %q, got %q", "txn_abc123", resp.Data.ID)
 		}
 	})
 

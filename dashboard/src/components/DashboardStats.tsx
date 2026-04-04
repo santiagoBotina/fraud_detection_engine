@@ -1,9 +1,14 @@
-import React, { useMemo } from "react";
-import type { Transaction } from "../types";
+import React from "react";
+import type { TransactionStatsResponse } from "../types";
+import { formatLatency, getLatencyColor } from "../utils/formatters";
 import RateBar from "./ui/RateBar";
+import ErrorBanner from "./ErrorBanner";
 
 interface DashboardStatsProps {
-  transactions: Transaction[];
+  stats: TransactionStatsResponse | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
 }
 
 const cardStyle: React.CSSProperties = {
@@ -39,26 +44,6 @@ const rateRowStyle: React.CSSProperties = {
   marginBottom: "2px",
 };
 
-function getTimeBuckets(transactions: Transaction[]) {
-  const now = Date.now();
-  const dayAgo = now - 86_400_000;
-  const weekAgo = now - 604_800_000;
-  const monthAgo = now - 2_592_000_000;
-
-  let today = 0;
-  let week = 0;
-  let month = 0;
-
-  for (const txn of transactions) {
-    const d = new Date(txn.created_at).getTime();
-    if (d >= dayAgo) today++;
-    if (d >= weekAgo) week++;
-    if (d >= monthAgo) month++;
-  }
-
-  return { today, week, month };
-}
-
 interface RateDisplayProps {
   label: string;
   rate: number;
@@ -79,55 +64,52 @@ function RateDisplay({ label, rate, count, color, textColor }: RateDisplayProps)
   );
 }
 
-function computeStats(transactions: Transaction[]) {
-  const total = transactions.length;
-  let approved = 0;
-  let declined = 0;
-  let pending = 0;
-  const methodCounts: Record<string, number> = {};
-
-  // js-combine-iterations: single pass for all counts
-  for (const txn of transactions) {
-    if (txn.status === "APPROVED") approved++;
-    else if (txn.status === "DECLINED") declined++;
-    else if (txn.status === "PENDING") pending++;
-    methodCounts[txn.payment_method] = (methodCounts[txn.payment_method] || 0) + 1;
+const DashboardStats: React.FC<DashboardStatsProps> = ({ stats, loading, error, onRetry }) => {
+  if (error) {
+    return (
+      <div style={{ marginBottom: "28px", fontFamily: "'Inter', sans-serif" }}>
+        <ErrorBanner message={error} onRetry={onRetry} />
+      </div>
+    );
   }
 
-  const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
-  const declineRate = total > 0 ? Math.round((declined / total) * 100) : 0;
-  const pendingRate = total > 0 ? Math.round((pending / total) * 100) : 0;
-  const buckets = getTimeBuckets(transactions);
-
-  const topMethods = Object.entries(methodCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
-
-  return { total, approved, declined, pending, approvalRate, declineRate, pendingRate, buckets, topMethods };
-}
-
-const DashboardStats: React.FC<DashboardStatsProps> = ({ transactions }) => {
-  const stats = useMemo(() => computeStats(transactions), [transactions]);
+  if (loading || !stats) {
+    return (
+      <div style={{ marginBottom: "28px", fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ color: "var(--color-text-muted)", padding: "20px", textAlign: "center" }}>
+          Loading stats…
+        </div>
+      </div>
+    );
+  }
 
   if (stats.total === 0) return null;
+
+  const approvalRate = Math.round((stats.approved / stats.total) * 100);
+  const declineRate = Math.round((stats.declined / stats.total) * 100);
+  const pendingRate = Math.round((stats.pending / stats.total) * 100);
+
+  const topMethods = Object.entries(stats.payment_methods)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
 
   return (
     <div style={{ marginBottom: "28px", fontFamily: "'Inter', sans-serif" }}>
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
         <div style={cardStyle}>
           <div style={statLabel}>Today</div>
-          <div style={statValue}>{stats.buckets.today}</div>
+          <div style={statValue}>{stats.today}</div>
         </div>
         <div style={cardStyle}>
           <div style={statLabel}>This Week</div>
-          <div style={statValue}>{stats.buckets.week}</div>
+          <div style={statValue}>{stats.this_week}</div>
         </div>
         <div style={cardStyle}>
           <div style={statLabel}>This Month</div>
-          <div style={statValue}>{stats.buckets.month}</div>
+          <div style={statValue}>{stats.this_month}</div>
         </div>
         <div style={cardStyle}>
-          <div style={statLabel}>Total Loaded</div>
+          <div style={statLabel}>Total</div>
           <div style={statValue}>{stats.total}</div>
         </div>
       </div>
@@ -135,18 +117,18 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ transactions }) => {
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <div style={{ ...cardStyle, flex: "1 1 300px" }}>
           <div style={statLabel}>Decision Rates</div>
-          <RateDisplay label="Approved" rate={stats.approvalRate} count={stats.approved} color="#a3d9a5" textColor="#1a5c2a" />
-          <RateDisplay label="Declined" rate={stats.declineRate} count={stats.declined} color="#f5a3a3" textColor="#7c1d1d" />
+          <RateDisplay label="Approved" rate={approvalRate} count={stats.approved} color="#a3d9a5" textColor="#1a5c2a" />
+          <RateDisplay label="Declined" rate={declineRate} count={stats.declined} color="#f5a3a3" textColor="#7c1d1d" />
           {stats.pending > 0 ? (
-            <RateDisplay label="Pending" rate={stats.pendingRate} count={stats.pending} color="#f5d89a" textColor="#6b4f10" />
+            <RateDisplay label="Pending" rate={pendingRate} count={stats.pending} color="#f5d89a" textColor="#6b4f10" />
           ) : null}
         </div>
 
         <div style={{ ...cardStyle, flex: "1 1 300px" }}>
           <div style={statLabel}>Payment Methods</div>
           <div style={{ marginTop: "12px" }}>
-            {stats.topMethods.length > 0 ? (
-              stats.topMethods.map(([method, count]) => {
+            {topMethods.length > 0 ? (
+              topMethods.map(([method, count]) => {
                 const pct = Math.round((count / stats.total) * 100);
                 return (
                   <div key={method} style={{ marginBottom: "10px" }}>
@@ -163,6 +145,39 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ transactions }) => {
             )}
           </div>
         </div>
+
+        {stats.finalized_count > 0 && (
+          <div style={{ ...cardStyle, flex: "1 1 300px" }}>
+            <div style={statLabel}>Finalization Latency</div>
+            <div style={{ ...statValue, marginTop: "4px", marginBottom: "8px" }}>
+              {formatLatency(stats.avg_latency_ms)}
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginBottom: "8px" }}>
+              avg across {stats.finalized_count} finalized
+            </div>
+            <RateDisplay
+              label="Low"
+              rate={Math.round((stats.latency_low / stats.finalized_count) * 100)}
+              count={stats.latency_low}
+              color={getLatencyColor("LOW")}
+              textColor="#1a5c2a"
+            />
+            <RateDisplay
+              label="Medium"
+              rate={Math.round((stats.latency_medium / stats.finalized_count) * 100)}
+              count={stats.latency_medium}
+              color={getLatencyColor("MEDIUM")}
+              textColor="#6b4f10"
+            />
+            <RateDisplay
+              label="High"
+              rate={Math.round((stats.latency_high / stats.finalized_count) * 100)}
+              count={stats.latency_high}
+              color={getLatencyColor("HIGH")}
+              textColor="#7c1d1d"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

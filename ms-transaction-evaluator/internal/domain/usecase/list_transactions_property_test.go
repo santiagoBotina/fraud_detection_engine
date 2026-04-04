@@ -29,7 +29,7 @@ func (m *paginatedMockRepo) Save(_ context.Context, _ *entity.TransactionEntity)
 	return nil
 }
 
-func (m *paginatedMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+func (m *paginatedMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus, _ *time.Time) error {
 	return nil
 }
 
@@ -56,6 +56,10 @@ func (m *paginatedMockRepo) FindAllPaginated(_ context.Context, limit int, _ str
 	}
 
 	return result, nextCursor, nil
+}
+
+func (m *paginatedMockRepo) FindAll(_ context.Context) ([]entity.TransactionEntity, error) {
+	return nil, nil
 }
 
 func TestProperty_PaginatedListRespectsLimitAndOrdering(t *testing.T) {
@@ -132,7 +136,7 @@ func (m *cursorPaginatedMockRepo) Save(_ context.Context, _ *entity.TransactionE
 	return nil
 }
 
-func (m *cursorPaginatedMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+func (m *cursorPaginatedMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus, _ *time.Time) error {
 	return nil
 }
 
@@ -206,6 +210,10 @@ func (m *cursorPaginatedMockRepo) FindAllPaginated(_ context.Context, limit int,
 	}
 
 	return page, nextCursor, nil
+}
+
+func (m *cursorPaginatedMockRepo) FindAll(_ context.Context) ([]entity.TransactionEntity, error) {
+	return nil, nil
 }
 
 func TestProperty_CursorPaginationYieldsCompleteCoverage(t *testing.T) {

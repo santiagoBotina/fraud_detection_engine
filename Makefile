@@ -5,6 +5,9 @@ setup: start wait-for-infra create-transactions-table create-rules-table create-
 start:
 	docker compose up -d --build
 
+start-scaled:
+	docker compose up -d --build --scale ms-decision-service=3 --scale ms-fraud-score=3
+
 wait-for-infra:
 	@echo "Waiting for DynamoDB to be ready..."
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
@@ -60,7 +63,7 @@ create-transactions-evaluator-topic:
 	  kafka-topics --create \
 	  --topic Transaction.Created \
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
-	  --partitions 1 \
+	  --partitions 6 \
 	  --replication-factor 1
 
 
@@ -86,7 +89,7 @@ create-decision-topic:
 	  kafka-topics --create \
 	  --topic Decision.Calculated \
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
-	  --partitions 1 \
+	  --partitions 6 \
 	  --replication-factor 1
 
 create-rule-evaluations-table:
@@ -130,13 +133,13 @@ create-fraud-score-topics:
 	  kafka-topics --create \
 	  --topic FraudScore.Request \
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
-	  --partitions 1 \
+	  --partitions 6 \
 	  --replication-factor 1
 	docker exec $(KAFKA_CONTAINER_NAME) \
 	  kafka-topics --create \
 	  --topic FraudScore.Calculated \
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
-	  --partitions 1 \
+	  --partitions 6 \
 	  --replication-factor 1
 
 

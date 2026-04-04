@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useFraudScore } from "./useFraudScore";
 import * as scoreApi from "../api/scores";
+import { ApiError } from "../api/errors";
 
 vi.mock("../api/scores", () => ({
   fetchScore: vi.fn(),
@@ -30,7 +31,7 @@ describe("useFraudScore", () => {
   });
 
   it("sets notFound on 404", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("Failed to fetch score for txn_1: 404 Not Found"));
+    mockFetch.mockRejectedValueOnce(new ApiError(404, "Failed to fetch score for txn_1: 404 Not Found"));
 
     const { result } = renderHook(() => useFraudScore("txn_1"));
 
@@ -43,7 +44,7 @@ describe("useFraudScore", () => {
   });
 
   it("sets error on non-404 failure", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("Service unavailable"));
+    mockFetch.mockRejectedValueOnce(new ApiError(500, "Service unavailable"));
 
     const { result } = renderHook(() => useFraudScore("txn_1"));
 

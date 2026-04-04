@@ -1,4 +1,5 @@
 import type { Transaction, PaginatedResponse, SingleResponse } from "../types";
+import { ApiError } from "./errors";
 
 export type { Transaction };
 export type TransactionsResponse = PaginatedResponse<Transaction>;
@@ -17,7 +18,8 @@ export async function fetchTransactions(
 
   const response = await fetch(`${BASE_URL}/transactions?${params}`);
   if (!response.ok) {
-    throw new Error(
+    throw new ApiError(
+      response.status,
       `Failed to fetch transactions: ${response.status} ${response.statusText}`
     );
   }
@@ -27,7 +29,8 @@ export async function fetchTransactions(
 export async function fetchTransaction(id: string): Promise<TransactionResponse> {
   const response = await fetch(`${BASE_URL}/transactions/${encodeURIComponent(id)}`);
   if (!response.ok) {
-    throw new Error(
+    throw new ApiError(
+      response.status,
       `Failed to fetch transaction ${id}: ${response.status} ${response.statusText}`
     );
   }

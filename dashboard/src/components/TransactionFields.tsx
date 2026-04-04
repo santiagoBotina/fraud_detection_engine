@@ -1,6 +1,7 @@
 import React from "react";
 import type { Transaction } from "../types";
 import StatusBadge from "./StatusBadge";
+import LatencyBadge from "./LatencyBadge";
 import FieldRow from "./ui/FieldRow";
 import Card from "./ui/Card";
 import { formatCurrency, formatDate, computeEvaluationTime } from "../utils/formatters";
@@ -9,8 +10,26 @@ interface TransactionFieldsProps {
   transaction: Transaction;
 }
 
+const awaitingBadgeStyle: React.CSSProperties = {
+  display: "inline-block",
+  padding: "3px 12px",
+  borderRadius: "9999px",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  fontFamily: "'Inter', sans-serif",
+  letterSpacing: "0.02em",
+  textTransform: "uppercase",
+  backgroundColor: "var(--color-pending, #f5d89a)",
+  color: "var(--color-pending-text, #6b4f10)",
+};
+
+const AwaitingBadge = () => (
+  <span style={awaitingBadgeStyle}>Awaiting decision</span>
+);
+
 const TransactionFields: React.FC<TransactionFieldsProps> = ({ transaction }) => {
   const evalTime = computeEvaluationTime(transaction.created_at, transaction.updated_at);
+  const isFinalized = transaction.status === "APPROVED" || transaction.status === "DECLINED";
 
   return (
     <Card>
@@ -26,6 +45,12 @@ const TransactionFields: React.FC<TransactionFieldsProps> = ({ transaction }) =>
       <FieldRow label="Customer IP">{transaction.customer_ip_address}</FieldRow>
       <FieldRow label="Created At">{formatDate(transaction.created_at)}</FieldRow>
       <FieldRow label="Updated At">{formatDate(transaction.updated_at)}</FieldRow>
+      <FieldRow label="Finalized At">
+        {isFinalized && transaction.finalized_at ? formatDate(transaction.finalized_at) : <AwaitingBadge />}
+      </FieldRow>
+      <FieldRow label="Finalization Latency">
+        {isFinalized ? <LatencyBadge latencyMs={transaction.finalization_latency_ms} /> : <AwaitingBadge />}
+      </FieldRow>
       <FieldRow label="Evaluation Time" last>{evalTime} ms</FieldRow>
     </Card>
   );

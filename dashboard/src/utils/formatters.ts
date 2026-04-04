@@ -32,3 +32,29 @@ export function computeEvaluationTime(
 ): number {
   return new Date(updatedAt).getTime() - new Date(createdAt).getTime();
 }
+
+export function formatLatency(ms: number): string {
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(1)}s`;
+}
+
+export type LatencyTier = "LOW" | "MEDIUM" | "HIGH";
+
+export function getLatencyTier(ms: number): LatencyTier {
+  if (ms <= 2000) return "LOW";
+  if (ms <= 5000) return "MEDIUM";
+  return "HIGH";
+}
+
+export function getLatencyColor(tier: string): string {
+  switch (tier) {
+    case "LOW":
+      return "#a3d9a5";
+    case "MEDIUM":
+      return "#f5d89a";
+    case "HIGH":
+      return "#f5a3a3";
+    default:
+      return "#a3d9a5";
+  }
+}

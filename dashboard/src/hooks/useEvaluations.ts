@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchEvaluations, type RuleEvaluationResult } from "../api/evaluations";
+import { ApiError } from "../api/errors";
 
 interface UseEvaluationsResult {
   evaluations: RuleEvaluationResult[];
@@ -20,8 +21,10 @@ export function useEvaluations(id: string | undefined): UseEvaluationsResult {
     try {
       const response = await fetchEvaluations(id);
       setEvaluations(response.data);
-    } catch {
-      setError("Unable to load rule evaluations");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setError("Unable to load rule evaluations");
+      }
     } finally {
       setLoading(false);
     }

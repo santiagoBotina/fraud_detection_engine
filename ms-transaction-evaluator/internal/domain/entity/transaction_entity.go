@@ -54,4 +54,5 @@ type TransactionEntity struct {
 	Status            TransactionStatus `json:"status"`
 	CreatedAt         time.Time         `json:"created_at"`
 	UpdatedAt         time.Time         `json:"updated_at"`
+	FinalizedAt       *time.Time        `json:"finalized_at,omitempty"`
 }

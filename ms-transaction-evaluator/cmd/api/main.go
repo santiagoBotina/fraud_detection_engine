@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -126,6 +127,7 @@ func main() {
 	updateStatusUseCase := usecase.NewUpdateTransactionStatusUseCase(transactionRepo)
 	listTransactionsUseCase := usecase.NewListTransactionsUseCase(transactionRepo)
 	getTransactionUseCase := usecase.NewGetTransactionUseCase(transactionRepo)
+	getTransactionStatsUseCase := usecase.NewGetTransactionStatsUseCase(transactionRepo)
 
 	e := echo.New()
 
@@ -152,10 +154,12 @@ func main() {
 
 	// Initialize controllers
 	transactionController := httpAdapter.NewTransactionController(validateUseCase, saveUseCase, logger)
+	transactionStatsController := httpAdapter.NewTransactionStatsController(getTransactionStatsUseCase, logger)
 	transactionQueryController := httpAdapter.NewTransactionQueryController(listTransactionsUseCase, getTransactionUseCase, logger)
 
-	// Register routes
+	// Register routes — stats BEFORE query so /transactions/stats doesn't match /transactions/:id
 	transactionController.RegisterRoutes(e)
+	transactionStatsController.RegisterRoutes(e)
 	transactionQueryController.RegisterRoutes(e)
 
 	// Swagger UI
@@ -184,7 +188,7 @@ func main() {
 		Str("topic", decisionTopic).
 		Msg("decision consumer group connected")
 
-	decisionConsumer := kafkaIn.NewDecisionConsumer(updateStatusUseCase, logger)
+	decisionConsumer := kafkaIn.NewDecisionConsumer(updateStatusUseCase, logger, getEnvAsInt("DECISION_MIN_DELAY_MS", 0), getEnvAsInt("DECISION_MAX_DELAY_MS", 0))
 	wrappedConsumer := otelsarama.WrapConsumerGroupHandler(decisionConsumer)
 
 	// Graceful shutdown
@@ -223,6 +227,15 @@ func main() {
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if n, err := strconv.Atoi(value); err == nil {
+			return n
+		}
 	}
 	return defaultValue
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchScore } from "./scores";
+import { ApiError } from "./errors";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -35,19 +36,21 @@ describe("fetchScore", () => {
     expect(url).toContain("/scores/txn%2Fspecial");
   });
 
-  it("throws on 404 response", async () => {
+  it("throws ApiError with status 404 on not found response", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found" });
 
-    await expect(fetchScore("missing")).rejects.toThrow(
-      "Failed to fetch score for missing: 404 Not Found"
-    );
+    const error = await fetchScore("missing").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(404);
+    expect(error.message).toContain("Failed to fetch score for missing");
   });
 
-  it("throws on 500 response", async () => {
+  it("throws ApiError with status 500 on server error response", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: "Internal Server Error" });
 
-    await expect(fetchScore("txn_1")).rejects.toThrow(
-      "Failed to fetch score for txn_1: 500 Internal Server Error"
-    );
+    const error = await fetchScore("txn_1").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(500);
+    expect(error.message).toContain("Failed to fetch score for txn_1");
   });
 });

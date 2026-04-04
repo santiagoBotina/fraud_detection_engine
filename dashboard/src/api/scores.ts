@@ -1,4 +1,5 @@
 import type { FraudScore } from "../types";
+import { ApiError } from "./errors";
 
 export type { FraudScore };
 
@@ -9,7 +10,8 @@ export async function fetchScore(transactionId: string): Promise<FraudScore> {
     `${BASE_URL}/scores/${encodeURIComponent(transactionId)}`
   );
   if (!response.ok) {
-    throw new Error(
+    throw new ApiError(
+      response.status,
       `Failed to fetch score for ${transactionId}: ${response.status} ${response.statusText}`
     );
   }

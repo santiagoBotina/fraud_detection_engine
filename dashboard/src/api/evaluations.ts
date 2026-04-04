@@ -1,4 +1,5 @@
 import type { RuleEvaluationResult, Rule } from "../types";
+import { ApiError } from "./errors";
 
 export type { RuleEvaluationResult, Rule };
 
@@ -19,7 +20,8 @@ export async function fetchEvaluations(
     `${BASE_URL}/evaluations/${encodeURIComponent(transactionId)}`
   );
   if (!response.ok) {
-    throw new Error(
+    throw new ApiError(
+      response.status,
       `Failed to fetch evaluations for ${transactionId}: ${response.status} ${response.statusText}`
     );
   }
@@ -29,7 +31,8 @@ export async function fetchEvaluations(
 export async function fetchRules(): Promise<RulesResponse> {
   const response = await fetch(`${BASE_URL}/rules`);
   if (!response.ok) {
-    throw new Error(
+    throw new ApiError(
+      response.status,
       `Failed to fetch rules: ${response.status} ${response.statusText}`
     );
   }

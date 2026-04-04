@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchTransactions, fetchTransaction } from "./transactions";
+import { ApiError } from "./errors";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -36,10 +37,17 @@ describe("fetchTransactions", () => {
     expect(url).toContain("cursor=cursor_token");
   });
 
-  it("throws on non-OK response", async () => {
+  it("throws ApiError on non-OK response", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: "Internal Server Error" });
 
-    await expect(fetchTransactions()).rejects.toThrow("Failed to fetch transactions: 500 Internal Server Error");
+    await expect(fetchTransactions()).rejects.toThrow(ApiError);
+    await mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: "Internal Server Error" });
+    try {
+      await fetchTransactions();
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect((e as ApiError).status).toBe(500);
+    }
   });
 });
 
@@ -66,9 +74,16 @@ describe("fetchTransaction", () => {
     expect(url).toContain("/transactions/txn%2Fspecial");
   });
 
-  it("throws on 404 response", async () => {
+  it("throws ApiError on 404 response", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found" });
 
-    await expect(fetchTransaction("missing")).rejects.toThrow("Failed to fetch transaction missing: 404 Not Found");
+    await expect(fetchTransaction("missing")).rejects.toThrow(ApiError);
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found" });
+    try {
+      await fetchTransaction("missing");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect((e as ApiError).status).toBe(404);
+    }
   });
 });

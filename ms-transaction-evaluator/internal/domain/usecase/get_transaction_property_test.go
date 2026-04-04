@@ -27,7 +27,7 @@ func (m *roundTripMockRepo) Save(_ context.Context, txn *entity.TransactionEntit
 	return nil
 }
 
-func (m *roundTripMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+func (m *roundTripMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus, _ *time.Time) error {
 	return nil
 }
 
@@ -41,6 +41,10 @@ func (m *roundTripMockRepo) FindByID(_ context.Context, id string) (*entity.Tran
 
 func (m *roundTripMockRepo) FindAllPaginated(_ context.Context, _ int, _ string) ([]entity.TransactionEntity, string, error) {
 	return nil, "", nil
+}
+
+func (m *roundTripMockRepo) FindAll(_ context.Context) ([]entity.TransactionEntity, error) {
+	return nil, nil
 }
 
 func TestProperty_TransactionRetrievalRoundTrip(t *testing.T) {

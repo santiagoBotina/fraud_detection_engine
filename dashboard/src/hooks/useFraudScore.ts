@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchScore, type FraudScore } from "../api/scores";
+import { ApiError } from "../api/errors";
 
 interface UseFraudScoreResult {
   score: FraudScore | null;
@@ -24,8 +25,7 @@ export function useFraudScore(id: string | undefined): UseFraudScoreResult {
       const result = await fetchScore(id);
       setScore(result);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "";
-      if (message.includes("404")) {
+      if (err instanceof ApiError && err.status === 404) {
         setNotFound(true);
       } else {
         setError("Unable to load fraud score");

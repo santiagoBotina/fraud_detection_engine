@@ -5,6 +5,7 @@ import (
 	"errors"
 	"ms-transaction-evaluator/internal/domain/entity"
 	"testing"
+	"time"
 )
 
 type mockTransactionRepository struct {
@@ -18,7 +19,7 @@ func (m *mockTransactionRepository) Save(ctx context.Context, transaction *entit
 	return nil
 }
 
-func (m *mockTransactionRepository) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+func (m *mockTransactionRepository) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus, _ *time.Time) error {
 	return nil
 }
 
@@ -28,6 +29,10 @@ func (m *mockTransactionRepository) FindByID(_ context.Context, _ string) (*enti
 
 func (m *mockTransactionRepository) FindAllPaginated(_ context.Context, _ int, _ string) ([]entity.TransactionEntity, string, error) {
 	return nil, "", nil
+}
+
+func (m *mockTransactionRepository) FindAll(_ context.Context) ([]entity.TransactionEntity, error) {
+	return nil, nil
 }
 
 type mockEventPublisher struct {

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { formatCurrency, formatDate, computeEvaluationTime } from "./formatters";
+import {
+  formatCurrency,
+  formatDate,
+  computeEvaluationTime,
+  formatLatency,
+  getLatencyTier,
+  getLatencyColor,
+} from "./formatters";
 
 describe("formatCurrency", () => {
   it("formats USD cents to dollars", () => {
@@ -56,5 +63,51 @@ describe("computeEvaluationTime", () => {
     const created = "2025-01-15T10:30:05Z";
     const updated = "2025-01-15T10:30:00Z";
     expect(computeEvaluationTime(created, updated)).toBe(-5000);
+  });
+});
+
+describe("formatLatency", () => {
+  it("formats 1200ms as 1.2s", () => {
+    expect(formatLatency(1200)).toBe("1.2s");
+  });
+
+  it("formats 3500ms as 3.5s", () => {
+    expect(formatLatency(3500)).toBe("3.5s");
+  });
+
+  it("formats 500ms as 0.5s", () => {
+    expect(formatLatency(500)).toBe("0.5s");
+  });
+});
+
+describe("getLatencyTier", () => {
+  it("returns LOW for 2000ms (boundary)", () => {
+    expect(getLatencyTier(2000)).toBe("LOW");
+  });
+
+  it("returns MEDIUM for 2001ms (just above LOW)", () => {
+    expect(getLatencyTier(2001)).toBe("MEDIUM");
+  });
+
+  it("returns MEDIUM for 5000ms (boundary)", () => {
+    expect(getLatencyTier(5000)).toBe("MEDIUM");
+  });
+
+  it("returns HIGH for 5001ms (just above MEDIUM)", () => {
+    expect(getLatencyTier(5001)).toBe("HIGH");
+  });
+});
+
+describe("getLatencyColor", () => {
+  it('returns green for LOW tier', () => {
+    expect(getLatencyColor("LOW")).toBe("#a3d9a5");
+  });
+
+  it('returns yellow for MEDIUM tier', () => {
+    expect(getLatencyColor("MEDIUM")).toBe("#f5d89a");
+  });
+
+  it('returns red for HIGH tier', () => {
+    expect(getLatencyColor("HIGH")).toBe("#f5a3a3");
   });
 });

@@ -241,7 +241,6 @@ All infrastructure runs locally via Docker Compose.
 | Tempo | `grafana/tempo:2.7.2` | 3200 | Distributed tracing |
 | Prometheus | `prom/prometheus:v3.4.1` | 9090 | Metrics storage |
 | OTel Collector | `otel/opentelemetry-collector-contrib:0.127.0` | 4317 | Telemetry pipeline |
-| cAdvisor | `gcr.io/cadvisor/cadvisor:v0.52.1` | 8081 | Container resource monitoring |
 | Kafka Exporter | `danielqsj/kafka-exporter:v1.9.0` | 9308 | Kafka metrics exporter |
 
 ---
@@ -298,7 +297,6 @@ The system includes a full Grafana-based observability stack that starts alongsi
 | Tempo | `grafana/tempo:2.7.2` | 3200 | Distributed tracing backend |
 | OTel Collector | `otel/opentelemetry-collector-contrib:0.127.0` | 4317/4318 | Receives OTLP traces/metrics, forwards to Tempo and Prometheus |
 | Prometheus | `prom/prometheus:v3.4.1` | 9090 | Metrics scraping and storage |
-| cAdvisor | `gcr.io/cadvisor/cadvisor:v0.52.1` | 8081 | Container CPU, memory, and network metrics |
 | Kafka Exporter | `danielqsj/kafka-exporter:v1.9.0` | 9308 | Exposes Kafka broker/topic/consumer-group metrics |
 
 ### Dashboards
@@ -350,7 +348,6 @@ Configurable ports via `.env`:
 | Variable | Default | Service |
 |---|---|---|
 | `GRAFANA_PORT` | 3003 | Grafana |
-| `CADVISOR_PORT` | 8081 | cAdvisor |
 
 ---
 

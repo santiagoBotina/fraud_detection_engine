@@ -45,6 +45,7 @@ type transactionItem struct {
 	Status            entity.TransactionStatus `dynamodbav:"status"`
 	CreatedAt         string                   `dynamodbav:"created_at"`
 	UpdatedAt         string                   `dynamodbav:"updated_at"`
+	FinalizedAt       string                   `dynamodbav:"finalized_at,omitempty"`
 }
 
 func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *entity.TransactionEntity) error {
@@ -110,7 +111,7 @@ func (r *DynamoDBTransactionRepository) Save(ctx context.Context, transaction *e
 }
 
 // UpdateStatus updates the status and updated_at fields of a transaction in DynamoDB.
-func (r *DynamoDBTransactionRepository) UpdateStatus(ctx context.Context, id string, status entity.TransactionStatus) error {
+func (r *DynamoDBTransactionRepository) UpdateStatus(ctx context.Context, id string, status entity.TransactionStatus, finalizedAt *time.Time) error {
 	r.logger.Info().
 		Str("transaction_id", id).
 		Str("status", string(status)).
@@ -119,19 +120,30 @@ func (r *DynamoDBTransactionRepository) UpdateStatus(ctx context.Context, id str
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z07:00")
 
+	updateExpr := "SET #s = :status, updated_at = :now"
+	exprAttrValues := map[string]types.AttributeValue{
+		":status": &types.AttributeValueMemberS{Value: string(status)},
+		":now":    &types.AttributeValueMemberS{Value: now},
+	}
+
+	if finalizedAt != nil {
+		updateExpr += ", finalized_at = :finalized_at"
+		exprAttrValues[":finalized_at"] = &types.AttributeValueMemberS{
+			Value: finalizedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
 	_, err := r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(r.tableName),
 		Key: map[string]types.AttributeValue{
 			"id": &types.AttributeValueMemberS{Value: id},
 		},
-		UpdateExpression: aws.String("SET #s = :status, updated_at = :now"),
+		UpdateExpression:          aws.String(updateExpr),
+		ConditionExpression:       aws.String("attribute_exists(id)"),
 		ExpressionAttributeNames: map[string]string{
 			"#s": "status",
 		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":status": &types.AttributeValueMemberS{Value: string(status)},
-			":now":    &types.AttributeValueMemberS{Value: now},
-		},
+		ExpressionAttributeValues: exprAttrValues,
 	})
 	if err != nil {
 		r.logger.Error().
@@ -167,6 +179,15 @@ func (r *DynamoDBTransactionRepository) mapItemToEntity(item transactionItem) (e
 		return entity.TransactionEntity{}, fmt.Errorf("failed to parse updated_at: %w", err)
 	}
 
+	var finalizedAt *time.Time
+	if item.FinalizedAt != "" {
+		t, err := time.Parse("2006-01-02T15:04:05Z07:00", item.FinalizedAt)
+		if err != nil {
+			return entity.TransactionEntity{}, fmt.Errorf("failed to parse finalized_at: %w", err)
+		}
+		finalizedAt = &t
+	}
+
 	return entity.TransactionEntity{
 		ID:                item.ID,
 		AmountInCents:     item.AmountInCents,
@@ -180,6 +201,7 @@ func (r *DynamoDBTransactionRepository) mapItemToEntity(item transactionItem) (e
 		Status:            item.Status,
 		CreatedAt:         createdAt,
 		UpdatedAt:         updatedAt,
+		FinalizedAt:       finalizedAt,
 	}, nil
 }
 
@@ -223,6 +245,58 @@ func (r *DynamoDBTransactionRepository) FindByID(ctx context.Context, id string)
 	}
 
 	return &txn, nil
+}
+
+func (r *DynamoDBTransactionRepository) FindAll(ctx context.Context) ([]entity.TransactionEntity, error) {
+	r.logger.Info().
+		Str("table", r.tableName).
+		Msg("scanning all transactions from DynamoDB")
+
+	var transactions []entity.TransactionEntity
+	var lastEvaluatedKey map[string]types.AttributeValue
+
+	for {
+		input := &dynamodb.ScanInput{
+			TableName:         aws.String(r.tableName),
+			ExclusiveStartKey: lastEvaluatedKey,
+		}
+
+		result, err := r.client.Scan(ctx, input)
+		if err != nil {
+			r.logger.Error().
+				Err(err).
+				Str("table", r.tableName).
+				Msg("failed to scan transactions from DynamoDB")
+			return nil, fmt.Errorf("failed to scan transactions: %w", err)
+		}
+
+		for _, item := range result.Items {
+			var ddbItem transactionItem
+			if err := attributevalue.UnmarshalMap(item, &ddbItem); err != nil {
+				r.logger.Warn().
+					Err(err).
+					Msg("failed to unmarshal transaction item, skipping")
+				continue
+			}
+
+			txn, err := r.mapItemToEntity(ddbItem)
+			if err != nil {
+				r.logger.Warn().
+					Err(err).
+					Msg("failed to map transaction item to entity, skipping")
+				continue
+			}
+
+			transactions = append(transactions, txn)
+		}
+
+		lastEvaluatedKey = result.LastEvaluatedKey
+		if lastEvaluatedKey == nil {
+			break
+		}
+	}
+
+	return transactions, nil
 }
 
 func (r *DynamoDBTransactionRepository) FindAllPaginated(ctx context.Context, limit int, cursor string) ([]entity.TransactionEntity, string, error) {
@@ -275,15 +349,18 @@ func (r *DynamoDBTransactionRepository) FindAllPaginated(ctx context.Context, li
 	for _, item := range result.Items {
 		var ddbItem transactionItem
 		if err := attributevalue.UnmarshalMap(item, &ddbItem); err != nil {
-			r.logger.Error().
+			r.logger.Warn().
 				Err(err).
-				Msg("failed to unmarshal transaction item")
-			return nil, "", fmt.Errorf("failed to unmarshal transaction: %w", err)
+				Msg("failed to unmarshal transaction item, skipping")
+			continue
 		}
 
 		txn, err := r.mapItemToEntity(ddbItem)
 		if err != nil {
-			return nil, "", err
+			r.logger.Warn().
+				Err(err).
+				Msg("failed to map transaction item to entity, skipping")
+			continue
 		}
 
 		transactions = append(transactions, txn)
@@ -296,7 +373,7 @@ func (r *DynamoDBTransactionRepository) FindAllPaginated(ctx context.Context, li
 
 	// Build next_cursor from DynamoDB's LastEvaluatedKey
 	var nextCursor string
-	if result.LastEvaluatedKey != nil && len(result.LastEvaluatedKey) > 0 {
+	if result.LastEvaluatedKey != nil && len(result.LastEvaluatedKey) > 0 && len(transactions) > 0 {
 		// Use the last item in our sorted results for the cursor
 		lastTxn := transactions[len(transactions)-1]
 		cur := paginationCursor{

@@ -18,7 +18,7 @@ func (m *listTransactionsMockRepo) Save(_ context.Context, _ *entity.Transaction
 	return nil
 }
 
-func (m *listTransactionsMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus) error {
+func (m *listTransactionsMockRepo) UpdateStatus(_ context.Context, _ string, _ entity.TransactionStatus, _ *time.Time) error {
 	return nil
 }
 
@@ -31,6 +31,10 @@ func (m *listTransactionsMockRepo) FindAllPaginated(ctx context.Context, limit i
 		return m.findAllPaginatedFunc(ctx, limit, cursor)
 	}
 	return nil, "", nil
+}
+
+func (m *listTransactionsMockRepo) FindAll(_ context.Context) ([]entity.TransactionEntity, error) {
+	return nil, nil
 }
 
 func TestListTransactionsUseCase_Execute(t *testing.T) {

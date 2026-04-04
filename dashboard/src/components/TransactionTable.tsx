@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import type { Transaction } from "../types";
+import LatencyBadge from "./LatencyBadge";
 import StatusBadge from "./StatusBadge";
 import Skeleton from "./ui/Skeleton";
 import { formatCurrency, formatDate } from "../utils/formatters";
@@ -49,6 +50,7 @@ const COLUMNS = [
   "Payment Method",
   "Customer Name",
   "Status",
+  "Latency",
   "Created At",
 ] as const;
 
@@ -83,6 +85,7 @@ function TransactionRow({ txn }: { txn: Transaction }) {
       <td style={tdStyle}>{txn.payment_method}</td>
       <td style={tdStyle}>{txn.customer_name}</td>
       <td style={tdStyle}><StatusBadge status={txn.status} /></td>
+      <td style={tdStyle}><LatencyBadge latencyMs={txn.finalization_latency_ms} /></td>
       <td style={{ ...tdStyle, color: "var(--color-text-muted)" }}>{formatDate(txn.created_at)}</td>
     </tr>
   );

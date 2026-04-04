@@ -5,6 +5,7 @@ import TransactionDetail from "./TransactionDetail";
 import * as txApi from "../api/transactions";
 import * as evalApi from "../api/evaluations";
 import * as scoreApi from "../api/scores";
+import { ApiError } from "../api/errors";
 
 vi.mock("../api/transactions", () => ({
   fetchTransaction: vi.fn(),
@@ -140,7 +141,7 @@ describe("TransactionDetail", () => {
     mockFetchTransaction.mockResolvedValueOnce({ data: sampleTransaction });
     mockFetchEvaluations.mockResolvedValueOnce({ data: sampleEvaluations });
     mockFetchScore.mockRejectedValueOnce(
-      new Error("Failed to fetch score for txn_001: 404 Not Found")
+      new ApiError(404, "Failed to fetch score for txn_001: 404 Not Found")
     );
 
     renderWithRouter();
@@ -178,7 +179,7 @@ describe("TransactionDetail", () => {
 
   it("shows inline error for evaluations failure with retry", async () => {
     mockFetchTransaction.mockResolvedValueOnce({ data: sampleTransaction });
-    mockFetchEvaluations.mockRejectedValueOnce(new Error("Service down"));
+    mockFetchEvaluations.mockRejectedValueOnce(new ApiError(500, "Service down"));
     mockFetchScore.mockResolvedValueOnce(sampleScore);
 
     renderWithRouter();
@@ -196,7 +197,7 @@ describe("TransactionDetail", () => {
   it("shows inline error for score failure with retry", async () => {
     mockFetchTransaction.mockResolvedValueOnce({ data: sampleTransaction });
     mockFetchEvaluations.mockResolvedValueOnce({ data: sampleEvaluations });
-    mockFetchScore.mockRejectedValueOnce(new Error("Service unavailable"));
+    mockFetchScore.mockRejectedValueOnce(new ApiError(500, "Service unavailable"));
 
     renderWithRouter();
 
@@ -212,7 +213,7 @@ describe("TransactionDetail", () => {
 
   it("retries evaluations on retry button click", async () => {
     mockFetchTransaction.mockResolvedValueOnce({ data: sampleTransaction });
-    mockFetchEvaluations.mockRejectedValueOnce(new Error("Service down"));
+    mockFetchEvaluations.mockRejectedValueOnce(new ApiError(500, "Service down"));
     mockFetchScore.mockResolvedValueOnce(sampleScore);
 
     renderWithRouter();

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useTransaction } from "../hooks/useTransaction";
 import { useEvaluations } from "../hooks/useEvaluations";
@@ -8,6 +8,7 @@ import ErrorBanner from "../components/ErrorBanner";
 import TransactionFields from "../components/TransactionFields";
 import RuleEvaluationsTable from "../components/RuleEvaluationsTable";
 import FraudScoreSection from "../components/FraudScoreSection";
+import Button from "../components/ui/Button";
 
 const backLinkStyle: React.CSSProperties = {
   display: "inline-flex",
@@ -21,11 +22,18 @@ const backLinkStyle: React.CSSProperties = {
 
 const TransactionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   // async-parallel: all three hooks fire in parallel on mount
   const { transaction, loading: txnLoading, error: txnError, retry: retryTxn } = useTransaction(id);
   const { evaluations, loading: evalLoading, error: evalError, retry: retryEval } = useEvaluations(id);
   const { score, notFound: scoreNotFound, loading: scoreLoading, error: scoreError, retry: retryScore } = useFraudScore(id);
+
+  const handleRefresh = async () => {
+    setRefreshingAll(true);
+    await Promise.all([retryTxn(), retryEval(), retryScore()]);
+    setRefreshingAll(false);
+  };
 
   if (txnLoading) {
     return <PageWrapper><div data-testid="loading">Loading transaction…</div></PageWrapper>;
@@ -42,7 +50,12 @@ const TransactionDetail: React.FC = () => {
   return (
     <PageWrapper>
       <Link to="/" style={backLinkStyle}>← Back to Transactions</Link>
-      <h2>Transaction {transaction.id}</h2>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+        <h2 style={{ margin: 0 }}>Transaction {transaction.id}</h2>
+        <Button loading={refreshingAll} onClick={handleRefresh} aria-label="Refresh transaction">
+          {refreshingAll ? "Refreshing…" : "↻ Refresh"}
+        </Button>
+      </div>
 
       <TransactionFields transaction={transaction} />
 

@@ -2,23 +2,71 @@ package http
 
 import (
 	"errors"
+	"ms-transaction-evaluator/internal/domain/entity"
 	"ms-transaction-evaluator/internal/domain/usecase"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog"
 )
 
+// TransactionResponse is the API response DTO for a single transaction.
+// It maps from TransactionEntity and adds a computed finalization_latency_ms field.
+type TransactionResponse struct {
+	ID                    string                   `json:"id"`
+	AmountInCents         int64                    `json:"amount_in_cents"`
+	Currency              entity.Currency          `json:"currency"`
+	PaymentMethod         entity.PaymentMethod     `json:"payment_method"`
+	CustomerID            string                   `json:"customer_id"`
+	CustomerName          string                   `json:"customer_name"`
+	CustomerEmail         string                   `json:"customer_email"`
+	CustomerPhone         string                   `json:"customer_phone"`
+	CustomerIPAddress     string                   `json:"customer_ip_address"`
+	Status                entity.TransactionStatus `json:"status"`
+	CreatedAt             time.Time                `json:"created_at"`
+	UpdatedAt             time.Time                `json:"updated_at"`
+	FinalizedAt           *time.Time               `json:"finalized_at,omitempty"`
+	FinalizationLatencyMs *int64                   `json:"finalization_latency_ms,omitempty"`
+}
+
+// toTransactionResponse maps a TransactionEntity to a TransactionResponse,
+// computing finalization_latency_ms when the transaction has been finalized.
+func toTransactionResponse(e entity.TransactionEntity) TransactionResponse {
+	resp := TransactionResponse{
+		ID:                e.ID,
+		AmountInCents:     e.AmountInCents,
+		Currency:          e.Currency,
+		PaymentMethod:     e.PaymentMethod,
+		CustomerID:        e.CustomerID,
+		CustomerName:      e.CustomerName,
+		CustomerEmail:     e.CustomerEmail,
+		CustomerPhone:     e.CustomerPhone,
+		CustomerIPAddress: e.CustomerIPAddress,
+		Status:            e.Status,
+		CreatedAt:         e.CreatedAt,
+		UpdatedAt:         e.UpdatedAt,
+		FinalizedAt:       e.FinalizedAt,
+	}
+
+	if e.FinalizedAt != nil {
+		latencyMs := e.FinalizedAt.Sub(e.CreatedAt).Milliseconds()
+		resp.FinalizationLatencyMs = &latencyMs
+	}
+
+	return resp
+}
+
 // ListTransactionsResponse represents the response for GET /transactions.
 type ListTransactionsResponse struct {
-	Data       interface{} `json:"data"`
-	NextCursor string      `json:"next_cursor"`
+	Data       []TransactionResponse `json:"data"`
+	NextCursor string                `json:"next_cursor"`
 }
 
 // TransactionDetailResponse represents the response for GET /transactions/:id.
 type TransactionDetailResponse struct {
-	Data interface{} `json:"data"`
+	Data TransactionResponse `json:"data"`
 }
 
 // TransactionQueryController handles read-only transaction query endpoints.
@@ -89,8 +137,13 @@ func (tqc *TransactionQueryController) ListTransactions(c *echo.Context) error {
 		Str("next_cursor", nextCursor).
 		Msg("transactions listed")
 
+	responses := make([]TransactionResponse, len(transactions))
+	for i, txn := range transactions {
+		responses[i] = toTransactionResponse(txn)
+	}
+
 	return c.JSON(http.StatusOK, ListTransactionsResponse{
-		Data:       transactions,
+		Data:       responses,
 		NextCursor: nextCursor,
 	})
 }
@@ -118,7 +171,7 @@ func (tqc *TransactionQueryController) GetTransaction(c *echo.Context) error {
 	tqc.logger.Info().Str("id", id).Msg("transaction retrieved")
 
 	return c.JSON(http.StatusOK, TransactionDetailResponse{
-		Data: transaction,
+		Data: toTransactionResponse(*transaction),
 	})
 }
 

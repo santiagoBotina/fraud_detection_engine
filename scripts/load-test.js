@@ -8,15 +8,19 @@ function randomIntBetween(min, max) {
 // Configure stages: ramp up, sustain, ramp down
 export const options = {
   stages: [
-    { duration: "30s", target: 10 },  // ramp up to 10 VUs
-    { duration: "1m", target: 10 },   // hold at 10 VUs
-    { duration: "30s", target: 30 },  // ramp up to 30 VUs
-    { duration: "1m", target: 30 },   // hold at 30 VUs
-    { duration: "30s", target: 0 },   // ramp down
+    { duration: "30s", target: 30 },   // ramp up to 30 VUs
+    { duration: "1m", target: 30 },    // hold at 30 VUs
+    { duration: "30s", target: 100 },  // ramp up to 100 VUs
+    { duration: "2m", target: 100 },   // sustain 100 VUs
+    { duration: "30s", target: 200 },  // spike to 200 VUs
+    { duration: "1m", target: 200 },   // hold spike
+    { duration: "30s", target: 50 },   // cool down
+    { duration: "1m", target: 50 },    // hold cool down
+    { duration: "30s", target: 0 },    // ramp down
   ],
   thresholds: {
-    http_req_duration: ["p(95)<2000"], // 95% of requests under 2s
-    http_req_failed: ["rate<0.05"],    // less than 5% errors
+    http_req_duration: ["p(95)<3000"], // 95% of requests under 3s
+    http_req_failed: ["rate<0.10"],    // less than 10% errors
   },
 };
 
@@ -84,5 +88,5 @@ export default function () {
     }
   }
 
-  sleep(randomIntBetween(1, 3));
+  sleep(Math.random() * 0.5 + 0.1); // 100-600ms between iterations
 }

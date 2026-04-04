@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchEvaluations, fetchRules } from "./evaluations";
+import { ApiError } from "./errors";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -45,12 +46,13 @@ describe("fetchEvaluations", () => {
     expect(result.data).toEqual([]);
   });
 
-  it("throws on non-OK response", async () => {
+  it("throws ApiError with status on non-OK response", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: "Internal Server Error" });
 
-    await expect(fetchEvaluations("txn_1")).rejects.toThrow(
-      "Failed to fetch evaluations for txn_1: 500 Internal Server Error"
-    );
+    await expect(fetchEvaluations("txn_1")).rejects.toSatisfy((err: unknown) => {
+      return err instanceof ApiError && err.status === 500 &&
+        err.message === "Failed to fetch evaluations for txn_1: 500 Internal Server Error";
+    });
   });
 });
 
@@ -80,9 +82,12 @@ describe("fetchRules", () => {
     expect(result).toEqual(body);
   });
 
-  it("throws on non-OK response", async () => {
+  it("throws ApiError with status on non-OK response", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 503, statusText: "Service Unavailable" });
 
-    await expect(fetchRules()).rejects.toThrow("Failed to fetch rules: 503 Service Unavailable");
+    await expect(fetchRules()).rejects.toSatisfy((err: unknown) => {
+      return err instanceof ApiError && err.status === 503 &&
+        err.message === "Failed to fetch rules: 503 Service Unavailable";
+    });
   });
 });

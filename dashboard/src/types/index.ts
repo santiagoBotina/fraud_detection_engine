@@ -13,6 +13,8 @@ export interface Transaction {
   status: string;
   created_at: string;
   updated_at: string;
+  finalized_at?: string;
+  finalization_latency_ms?: number;
 }
 
 export interface RuleEvaluationResult {
@@ -44,6 +46,22 @@ export interface FraudScore {
   transaction_id: string;
   fraud_score: number;
   calculated_at: string;
+}
+
+export interface TransactionStatsResponse {
+  today: number;
+  this_week: number;
+  this_month: number;
+  total: number;
+  approved: number;
+  declined: number;
+  pending: number;
+  payment_methods: Record<string, number>;
+  avg_latency_ms: number;
+  finalized_count: number;
+  latency_low: number;
+  latency_medium: number;
+  latency_high: number;
 }
 
 // API response wrappers
