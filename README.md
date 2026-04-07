@@ -12,7 +12,7 @@ A backend system for evaluating financial transactions and detecting potential f
 - [Services](#services)
   - [Transaction Evaluator](#transaction-evaluator-ms-transaction-evaluator)
   - [Decision Service](#decision-service-ms-decision-service)
-  - [Fraud Score Service](#fraud-score-service-ms-fraud-score)
+  - [Fraud Signals Service](#fraud-signals-service-ms-fraud-signals)
   - [BastionIQ Dashboard](#bastioniq-dashboard-dashboard)
 - [Infrastructure](#infrastructure)
 - [Kafka Topics](#kafka-topics)
@@ -30,7 +30,7 @@ A backend system for evaluating financial transactions and detecting potential f
 
 ## Overview
 
-The Fraud Detection Engine processes financial transactions through a pipeline that validates, persists, evaluates against configurable rules, and optionally computes a fraud score using fuzzy logic. The system produces a final decision for each transaction: `APPROVED`, `DECLINED`, or routed through `FRAUD_CHECK` for deeper analysis.
+The Fraud Detection Engine processes financial transactions through a pipeline that validates, persists, evaluates against configurable rules, and computes a fraud score through a multi-signal pipeline. The system produces a final decision for each transaction: `APPROVED`, `DECLINED`, or routed through `FRAUD_CHECK` for deeper analysis.
 
 The engine follows a fail-open design — if no rule matches a transaction, it is approved by default.
 
@@ -58,18 +58,22 @@ The system follows Hexagonal Architecture (Ports & Adapters) across all services
 │                                          FraudScore│.Request                │
 │                                                    │                        │
 │                                        ┌───────────▼──────────┐             │
-│                                        │  Fraud Score         │             │
+│                                        │  Fraud Signals       │             │
 │                                        │  Service             │             │
 │                                        │  (Python / FastAPI)  │             │
 │                                        │                      │             │
-│                                        │  Fuzzy Logic Scorer  │             │
+│                                        │  Signal Pipeline:    │             │
+│                                        │   • FraudScoreSignal │             │
+│                                        │   • SimilaritySignal │             │
+│                                        │  Qdrant (vectors)    │             │
 │                                        │  Redis (cache)       │             │
 │                                        │  DynamoDB (scores)   │             │
 │                                        │  Kafka Consumer/     │             │
 │                                        │  Producer            │             │
 │                                        └──────────────────────┘             │
 │                                                                             │
-│  Infrastructure: DynamoDB Local | Kafka + Zookeeper | Redis | Kafka UI      │
+│  Infrastructure: DynamoDB Local | Kafka + Zookeeper | Redis | Qdrant |      │
+│                  Kafka UI                                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -85,12 +89,16 @@ A transaction goes through the following pipeline:
 
 3. The Decision Service consumes the event and evaluates the transaction against active rules sorted by priority:
    - If a rule matches with `APPROVED` or `DECLINED`, the result is published to `Decision.Calculated`.
-   - If a rule matches with `FRAUD_CHECK`, the transaction is forwarded to `FraudScore.Request` for deeper analysis.
+   - If a rule matches with `FRAUD_CHECK`, the transaction is forwarded to `FraudSignals.Request` for deeper analysis.
    - If no rule matches, the transaction is approved (fail-open).
 
-4. The Fraud Score Service consumes `FraudScore.Request`, computes a fraud score (0–100) using a fuzzy inference system, caches the result in Redis, persists it to DynamoDB, and publishes the score to `FraudScore.Calculated`.
+4. The Fraud Signals Service consumes `FraudSignals.Request` and processes the transaction through a signal pipeline:
+   - **FraudScoreSignal** computes a baseline fraud score (0–100) using fuzzy logic.
+   - If the score falls in the neutral range (30–70), the **SimilaritySignal** queries Qdrant for the top-5 most similar historical transactions and computes an adjustment (−20 to +20).
+   - The final score is `clamp(base + adjustment, 0, 100)`.
+   - The result is cached in Redis, persisted to DynamoDB (with signal metadata), and published to `FraudSignals.Calculated`.
 
-5. The Decision Service consumes `FraudScore.Calculated`, evaluates the fraud score against fraud-score-specific rules, and publishes the final decision to `Decision.Calculated`.
+5. The Decision Service consumes `FraudSignals.Calculated`, evaluates the fraud score against fraud-score-specific rules, and publishes the final decision to `Decision.Calculated`.
 
 6. The Transaction Evaluator consumes `Decision.Calculated` and updates the transaction status in DynamoDB to `APPROVED` or `DECLINED`.
 
@@ -153,8 +161,8 @@ The rules engine of the system. Evaluates transactions against configurable rule
 Responsibilities:
 - Consume `Transaction.Created` events
 - Evaluate transactions against active rules sorted by priority
-- Publish decisions to `Decision.Calculated` or route to `FraudScore.Request`
-- Consume `FraudScore.Calculated` events and apply fraud-score rules for a final decision
+- Publish decisions to `Decision.Calculated` or route to `FraudSignals.Request`
+- Consume `FraudSignals.Calculated` events and apply fraud-score rules for a final decision
 
 Rule evaluation supports these condition fields:
 - `amount_in_cents` (numeric comparison)
@@ -166,9 +174,9 @@ Rule evaluation supports these condition fields:
 
 Operators: `GREATER_THAN`, `LESS_THAN`, `EQUAL`, `NOT_EQUAL`, `GREATER_THAN_OR_EQUAL`, `LESS_THAN_OR_EQUAL`
 
-### Fraud Score Service (`ms-fraud-score`)
+### Fraud Signals Service (`ms-fraud-signals`)
 
-Computes fraud scores using a fuzzy logic inference system. This is the only Python service in the system.
+Processes fraud signals through an extensible pipeline architecture. Replaces the original single-scorer approach with a multi-signal system that combines fuzzy logic scoring with vector similarity search for borderline transactions.
 
 | Property | Value |
 |---|---|
@@ -177,18 +185,31 @@ Computes fraud scores using a fuzzy logic inference system. This is the only Pyt
 | Port | 3002 |
 | Database | DynamoDB (`ddb-fraud-scores`) |
 | Cache | Redis |
+| Vector DB | Qdrant (`transaction-embeddings`) |
 
 Responsibilities:
-- Consume `FraudScore.Request` events from Kafka
-- Compute a fraud score (0–100) using fuzzy logic based on:
-  - Transaction amount (0–1,000,000 cents)
-  - Payment method risk (BANK_TRANSFER=1, CARD=3, CRYPTO=8)
-  - IP address risk (hash-based heuristic, 0–10)
-- Cache scores in Redis
-- Persist scores to DynamoDB
-- Publish results to `FraudScore.Calculated`
+- Consume `FraudSignals.Request` events from Kafka
+- Execute a **SignalPipeline** of registered signals in order:
+  1. **FraudScoreSignal** — computes a baseline fraud score (0–100) using fuzzy logic based on amount, payment method risk, and IP risk
+  2. **SimilaritySignal** — triggered only when the baseline score is in the neutral range (30–70); queries Qdrant for the top-5 most similar historical transactions and computes an adjustment (−20 to +20)
+- Aggregate the final score: `clamp(base_score + adjustment, 0, 100)`
+- Cache scores in Redis (TTL 3600s)
+- Persist scores and signal metadata (`signals_summary`) to DynamoDB
+- Publish `FraudSignalResult` to `FraudSignals.Calculated` (backward-compatible format)
 
-The fuzzy inference system uses trapezoidal and triangular membership functions with 7 inference rules to classify transactions into low, medium, and high fraud risk categories.
+The pipeline is extensible — new signal types can be added by implementing the `Signal` ABC and registering them with the pipeline, without modifying existing code.
+
+#### Why a Vector Database?
+
+The SimilaritySignal needs to answer: "which historical transactions look most like this one?" This is a nearest-neighbor search problem. Each transaction is converted into a 3-dimensional embedding vector derived from the same risk factors the fuzzy scorer already uses:
+
+| Dimension | Source | Range |
+|---|---|---|
+| `amount_normalized` | `min(amount_in_cents / 1,000,000, 1.0)` | 0–1 |
+| `payment_risk_norm` | Payment method risk weight / 10 (BANK_TRANSFER=0.1, CARD=0.3, CRYPTO=0.8) | 0–1 |
+| `ip_risk_norm` | Hash-based IP risk heuristic / 10 | 0–1 |
+
+Qdrant performs cosine similarity search over these vectors, returning the top-5 closest historical transactions. If most neighbors were declined, the adjustment pushes the score up (more suspicious); if most were approved, it pushes the score down. This gives borderline transactions additional context that a single fuzzy score can't capture — pattern matching against real historical outcomes.
 
 ### BastionIQ Dashboard (`dashboard`)
 
@@ -235,6 +256,7 @@ All infrastructure runs locally via Docker Compose.
 | Kafka | `confluentinc/cp-kafka:7.5.0` | 9092 | Event streaming |
 | Kafka UI | `provectuslabs/kafka-ui` | 8080 | Kafka topic browser and monitoring |
 | Redis | `redis:7-alpine` | 6379 | Fraud score caching |
+| Qdrant | `qdrant/qdrant` | 6333, 6334 | Vector database for transaction similarity search |
 | BastionIQ Dashboard | `node:20 + nginx` | 5173 | Fraud analyst dashboard SPA |
 | Grafana | `grafana/grafana:11.6.0` | 3003 | Observability dashboards |
 | Loki + Promtail | `grafana/loki:3.5.0` | 3100 | Log aggregation |
@@ -251,8 +273,8 @@ All infrastructure runs locally via Docker Compose.
 |---|---|---|---|
 | `Transaction.Created` | Transaction Evaluator | Decision Service | Full transaction entity |
 | `Decision.Calculated` | Decision Service | Transaction Evaluator | `{ transaction_id, status }` |
-| `FraudScore.Request` | Decision Service | Fraud Score Service | Transaction attributes for scoring |
-| `FraudScore.Calculated` | Fraud Score Service | Decision Service | `{ transaction_id, fraud_score, calculated_at }` |
+| `FraudSignals.Request` | Decision Service | Fraud Signals Service | Transaction attributes for scoring |
+| `FraudSignals.Calculated` | Fraud Signals Service | Decision Service | `{ transaction_id, fraud_score, calculated_at, signals }` |
 
 ---
 
@@ -263,7 +285,7 @@ All infrastructure runs locally via Docker Compose.
 | `ddb-transactions` | `id` (String) | — | Transaction Evaluator |
 | `ddb-rules` | `rule_id` (String) | — | Decision Service |
 | `ddb-rule-evaluations` | `transaction_id` (String) | `rule_id` (String) | Decision Service |
-| `ddb-fraud-scores` | `transaction_id` (String) | — | Fraud Score Service |
+| `ddb-fraud-scores` | `transaction_id` (String) | — | Fraud Signals Service |
 
 ---
 
@@ -357,7 +379,7 @@ Configurable ports via `.env`:
 
 - Docker and Docker Compose
 - Go 1.25+ (for local development of Go services)
-- Python 3.12+ (for local development of the fraud score service)
+- Python 3.12+ (for local development of the fraud signals service)
 - AWS CLI (used via Docker for DynamoDB operations)
 
 ### Full Setup (recommended)
@@ -371,11 +393,12 @@ make setup
 This runs the following steps in order:
 1. `start` — Builds and starts all Docker containers
 2. `wait-for-infra` — Waits for DynamoDB and Kafka to be healthy
-3. `create-transactions-table` — Creates the transactions table
-4. `create-rules-table` — Creates the rules table
-5. `create-fraud-scores-table` — Creates the fraud scores table
-6. `seed` — Seeds rules, sample transactions, and fraud scores
-7. `create-topics` — Creates all Kafka topics
+3. `seed-qdrant` — Creates and seeds the Qdrant vector collection
+4. `create-transactions-table` — Creates the transactions table
+5. `create-rules-table` — Creates the rules table
+6. `create-fraud-scores-table` — Creates the fraud scores table
+7. `seed` — Seeds rules, sample transactions, fraud scores, and Qdrant embeddings
+8. `create-topics` — Creates all Kafka topics
 
 ### Manual Infrastructure Start
 
@@ -390,6 +413,9 @@ make create-fraud-scores-table
 
 # Seed data
 make seed
+
+# Seed Qdrant separately (also included in seed)
+make seed-qdrant
 
 # Create Kafka topics
 make create-topics
@@ -438,8 +464,8 @@ cd ms-decision-service
 make run          # Standard run
 make run-dev      # Hot-reload with Air
 
-# Fraud Score Service (Python)
-cd ms-fraud-score
+# Fraud Signals Service (Python)
+cd ms-fraud-signals
 make install      # Install dependencies
 make run          # Run with uvicorn (hot-reload)
 ```
@@ -453,8 +479,8 @@ cd ms-transaction-evaluator && make test
 # Decision Service
 cd ms-decision-service && make test
 
-# Fraud Score Service
-cd ms-fraud-score && make test
+# Fraud Signals Service
+cd ms-fraud-signals && make test
 
 # Dashboard
 cd dashboard && npm test
@@ -472,7 +498,7 @@ cd ms-decision-service && make lint
 The Python service uses ruff:
 
 ```bash
-cd ms-fraud-score && make lint
+cd ms-fraud-signals && make lint
 ```
 
 ### Useful Commands
@@ -488,7 +514,7 @@ cd ms-transaction-evaluator && make get-transaction ID=<transaction-id>
 cd ms-decision-service && make list-rules
 
 # List all fraud scores
-cd ms-fraud-score && make list-scores
+cd ms-fraud-signals && make list-scores
 ```
 
 ---
@@ -499,11 +525,12 @@ cd ms-fraud-score && make list-scores
 |---|---|
 | Transaction Evaluator | Go 1.25, Echo v5, AWS SDK v2, Sarama (Kafka), zerolog |
 | Decision Service | Go 1.25, Sarama (Kafka), AWS SDK v2, zerolog |
-| Fraud Score Service | Python 3.12, FastAPI, confluent-kafka, scikit-fuzzy, Redis, boto3 |
+| Fraud Signals Service | Python 3.12, FastAPI, confluent-kafka, scikit-fuzzy, qdrant-client, Redis, boto3 |
 | BastionIQ Dashboard | TypeScript, React 18, Vite, React Router v6 |
 | Message Broker | Apache Kafka 7.5.0 (Confluent) + Zookeeper |
 | Database | Amazon DynamoDB Local |
 | Cache | Redis 7 (Alpine) |
+| Vector Database | Qdrant |
 | API Docs | Swagger/OpenAPI (swag + echo-swagger) |
 | Containerization | Docker + Docker Compose |
 | Observability | Grafana, Loki, Tempo, Prometheus, OpenTelemetry, cAdvisor |
@@ -522,6 +549,7 @@ cd ms-fraud-score && make list-scores
 ├── .env                            # Shared environment variables
 ├── scripts/
 │   ├── seed-dynamo.sh              # Seeds DynamoDB tables with rules and sample data
+│   ├── seed-qdrant.py              # Seeds Qdrant with transaction embeddings
 │   ├── test-approved.sh            # Test script for approved transaction flow
 │   ├── test-declined.sh            # Test script for declined transaction flow
 │   └── test-fraud-check.sh         # Test script for fraud check flow
@@ -554,19 +582,19 @@ cd ms-fraud-score && make list-scores
 │   │           └── out/            # DynamoDB rule repo, Kafka publishers
 │   └── Makefile
 │
-├── ms-fraud-score/                 # Fraud Score Service (Python)
+├── ms-fraud-signals/                # Fraud Signals Service (Python)
 │   ├── app/
 │   │   ├── main.py                 # FastAPI entrypoint with Kafka consumer lifecycle
-│   │   ├── config.py               # Environment configuration
+│   │   ├── config.py               # Environment configuration (incl. Qdrant)
 │   │   ├── domain/
-│   │   │   ├── entity/             # FraudScoreRequest, FraudScoreResult
-│   │   │   ├── port/               # Port interfaces (cache, publisher, store)
-│   │   │   ├── service/            # Fuzzy logic scorer
-│   │   │   └── usecase/            # Compute fraud score orchestration
+│   │   │   ├── entity/             # FraudSignalRequest, FraudSignalResult, SignalContext, SignalResult
+│   │   │   ├── port/               # Port interfaces (cache, publisher, store, vector_search)
+│   │   │   ├── service/            # Signal ABC, SignalPipeline, FraudScoreSignal, SimilaritySignal, embedding
+│   │   │   └── usecase/            # ProcessFraudSignalsUseCase
 │   │   └── infrastructure/
 │   │       └── adapter/
 │   │           ├── inbound/        # Kafka consumer
-│   │           └── outbound/       # Redis cache, DynamoDB store, Kafka publisher
+│   │           └── outbound/       # Redis cache, DynamoDB store, Kafka publisher, Qdrant search
 │   ├── requirements.txt
 │   └── Makefile
 │

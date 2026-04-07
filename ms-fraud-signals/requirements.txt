@@ -1,0 +1,14 @@
+confluent-kafka
+redis
+boto3
+scikit-fuzzy
+numpy
+fastapi
+uvicorn
+httpx
+hypothesis
+pytest
+fakeredis
+scipy
+networkx
+qdrant-client

@@ -70,17 +70,25 @@ services:
     networks:
       - local-network
 
-  ms-fraud-score:
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    networks:
+      - local-network
+
+  ms-fraud-signals:
     build:
-      context: ./ms-fraud-score
+      context: ./ms-fraud-signals
       dockerfile: Dockerfile
     ports:
       - "${FRAUD_SCORE_APP_PORT}:8000"
     environment:
       KAFKA_BROKER_ADDRESS: kafka:29092
       KAFKA_CONSUMER_GROUP: fraud-score-group
-      KAFKA_FRAUD_SCORE_REQUEST_TOPIC: FraudScore.Request
-      KAFKA_FRAUD_SCORE_CALCULATED_TOPIC: FraudScore.Calculated
+      KAFKA_FRAUD_SIGNALS_REQUEST_TOPIC: FraudSignals.Request
+      KAFKA_FRAUD_SIGNALS_CALCULATED_TOPIC: FraudSignals.Calculated
       REDIS_HOST: redis
       REDIS_PORT: 6379
       DYNAMO_DB_ENDPOINT: http://dynamodb:${DYNAMO_DB_PORT}
@@ -90,12 +98,16 @@ services:
       AWS_SECRET_ACCESS_KEY: dummy
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
     depends_on:
       kafka:
         condition: service_healthy
       redis:
         condition: service_started
       dynamodb:
+        condition: service_started
+      qdrant:
         condition: service_started
     networks:
       - local-network
@@ -141,8 +153,8 @@ services:
       KAFKA_CONSUMER_GROUP: decision-service-group
       KAFKA_TRANSACTION_CREATED_TOPIC: Transaction.Created
       KAFKA_DECISION_CALCULATED_TOPIC: Decision.Calculated
-      KAFKA_FRAUD_SCORE_REQUEST_TOPIC: FraudScore.Request
-      KAFKA_FRAUD_SCORE_CALCULATED_TOPIC: FraudScore.Calculated
+      KAFKA_FRAUD_SIGNALS_REQUEST_TOPIC: FraudSignals.Request
+      KAFKA_FRAUD_SIGNALS_CALCULATED_TOPIC: FraudSignals.Calculated
       DYNAMO_DB_RULES_TABLE: ${DYNAMO_DB_RULES_TABLE}
       DYNAMO_DB_RULE_EVALUATIONS_TABLE: ${DYNAMO_DB_RULE_EVALUATIONS_TABLE}
       DYNAMO_DB_ENDPOINT: http://dynamodb:${DYNAMO_DB_PORT}

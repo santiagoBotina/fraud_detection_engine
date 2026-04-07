@@ -27,7 +27,7 @@ curl -s -X POST "${BASE_URL}/evaluate" \
 echo ""
 echo "Expected: Transaction saved with status PENDING, then decision-service evaluates → FRAUD_CHECK"
 echo "(Matches rule-003: amount_in_cents > 500,000 → FRAUD_CHECK)"
-echo "The transaction is then published to FraudScore.Request topic for fraud score calculation."
+echo "The transaction is then published to FraudSignals.Request topic for fraud signal processing."
 echo ""
 echo "--- Alternative: COP currency ---"
 echo "Payload: \$200 COP via CARD (triggers rule-004: COP currency)"

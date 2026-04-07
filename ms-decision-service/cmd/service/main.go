@@ -94,7 +94,7 @@ func main() {
 	decisionPublisher := kafkaOut.NewSaramaDecisionPublisher(producer, decisionTopic, logger)
 
 	// Fraud score request publisher
-	fraudScoreRequestTopic := getEnvOrDefault("KAFKA_FRAUD_SCORE_REQUEST_TOPIC", "FraudScore.Request")
+	fraudScoreRequestTopic := getEnvOrDefault("KAFKA_FRAUD_SIGNALS_REQUEST_TOPIC", "FraudSignals.Request")
 	fraudScorePublisher := kafkaOut.NewSaramaFraudScoreRequestPublisher(producer, fraudScoreRequestTopic, logger)
 	logger.Info().Str("topic", fraudScoreRequestTopic).Msg("fraud score request publisher initialized")
 
@@ -155,7 +155,7 @@ func main() {
 	wrappedConsumer := otelsarama.WrapConsumerGroupHandler(consumer)
 
 	// Fraud score consumer group
-	fraudScoreCalculatedTopic := getEnvOrDefault("KAFKA_FRAUD_SCORE_CALCULATED_TOPIC", "FraudScore.Calculated")
+	fraudScoreCalculatedTopic := getEnvOrDefault("KAFKA_FRAUD_SIGNALS_CALCULATED_TOPIC", "FraudSignals.Calculated")
 	fraudScoreConsumerGroup := "fraud-score-consumer-group"
 
 	logger.Info().Str("group", fraudScoreConsumerGroup).Str("topic", fraudScoreCalculatedTopic).Msg("creating fraud score consumer group")

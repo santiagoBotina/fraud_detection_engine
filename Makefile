@@ -1,12 +1,12 @@
 include .env
 
-setup: start wait-for-infra create-transactions-table create-rules-table create-rule-evaluations-table create-fraud-scores-table seed create-topics
+setup: start wait-for-infra seed-qdrant create-transactions-table create-rules-table create-rule-evaluations-table create-fraud-scores-table seed create-topics
 
 start:
 	docker compose up -d --build
 
 start-scaled:
-	docker compose up -d --build --scale ms-decision-service=3 --scale ms-fraud-score=3
+	docker compose up -d --build --scale ms-decision-service=3 --scale ms-fraud-signals=3
 
 wait-for-infra:
 	@echo "Waiting for DynamoDB to be ready..."
@@ -26,8 +26,12 @@ wait-for-infra:
 
 seed:
 	bash scripts/seed-dynamo.sh
+	python scripts/seed-qdrant.py
 
-create-topics: create-transactions-evaluator-topic create-decision-topic create-fraud-score-topics
+seed-qdrant:
+	python scripts/seed-qdrant.py
+
+create-topics: create-transactions-evaluator-topic create-decision-topic create-fraud-signals-topics
 
 
 # === SCRIPTS TO TEST SCENARIOS ===
@@ -111,7 +115,7 @@ create-rule-evaluations-table:
 	  --region us-east-1
 
 
-# === FRAUD SCORE SERVICE ===
+# === FRAUD SIGNALS SERVICE ===
 create-fraud-scores-table:
 	docker run --rm \
 	  --network fraud_detection_engine_local-network \
@@ -128,16 +132,16 @@ create-fraud-scores-table:
 	  --endpoint-url $(DYNAMO_DB_ENDPOINT) \
 	  --region us-east-1
 
-create-fraud-score-topics:
+create-fraud-signals-topics:
 	docker exec $(KAFKA_CONTAINER_NAME) \
 	  kafka-topics --create \
-	  --topic FraudScore.Request \
+	  --topic FraudSignals.Request \
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
 	  --partitions 6 \
 	  --replication-factor 1
 	docker exec $(KAFKA_CONTAINER_NAME) \
 	  kafka-topics --create \
-	  --topic FraudScore.Calculated \
+	  --topic FraudSignals.Calculated \
 	  --bootstrap-server localhost:$(KAFKA_PORT) \
 	  --partitions 6 \
 	  --replication-factor 1
