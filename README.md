@@ -392,7 +392,7 @@ make setup
 
 This runs the following steps in order:
 1. `start` — Builds and starts all Docker containers
-2. `wait-for-infra` — Waits for DynamoDB and Kafka to be healthy
+2. `wait-for-infra` — Waits for DynamoDB, Kafka, and Qdrant to be healthy
 3. `seed-qdrant` — Creates and seeds the Qdrant vector collection
 4. `create-transactions-table` — Creates the transactions table
 5. `create-rules-table` — Creates the rules table

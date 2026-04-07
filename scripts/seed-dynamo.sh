@@ -165,7 +165,7 @@ $aws dynamodb put-item \
     \"customer_email\":    {\"S\": \"alice@example.com\"},
     \"customer_phone\":    {\"S\": \"+1234567890\"},
     \"customer_ip_address\":{\"S\": \"192.168.1.10\"},
-    \"status\":            {\"S\": \"PENDING\"},
+    \"status\":            {\"S\": \"DECLINED\"},
     \"created_at\":        {\"S\": \"$NOW\"},
     \"updated_at\":        {\"S\": \"$NOW\"}
   }"
@@ -185,7 +185,7 @@ $aws dynamodb put-item \
     \"customer_email\":    {\"S\": \"bob@example.com\"},
     \"customer_phone\":    {\"S\": \"+0987654321\"},
     \"customer_ip_address\":{\"S\": \"10.0.0.5\"},
-    \"status\":            {\"S\": \"PENDING\"},
+    \"status\":            {\"S\": \"APPROVED\"},
     \"created_at\":        {\"S\": \"$NOW\"},
     \"updated_at\":        {\"S\": \"$NOW\"}
   }"

@@ -23,13 +23,23 @@ wait-for-infra:
 	    && echo "Kafka is ready." && break \
 	    || (echo "  attempt $$i/10..." && sleep 2); \
 	done
+	@echo "Waiting for Qdrant to be ready..."
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+	  curl -sf http://$(QDRANT_HOST):$(QDRANT_PORT)/readyz > /dev/null 2>&1 \
+	    && echo "Qdrant is ready." && break \
+	    || (echo "  attempt $$i/10..." && sleep 2); \
+	done
 
 seed:
 	bash scripts/seed-dynamo.sh
-	python scripts/seed-qdrant.py
+	$(MAKE) seed-qdrant
 
 seed-qdrant:
-	python scripts/seed-qdrant.py
+	docker run --rm --network fraud_detection_engine_local-network \
+	  -v $(PWD)/scripts:/scripts \
+	  -e QDRANT_HOST=$(QDRANT_CONTAINER_NAME) \
+	  -e QDRANT_PORT=$(QDRANT_PORT) \
+	  fraud_detection_engine-ms-fraud-signals python /scripts/seed-qdrant.py
 
 create-topics: create-transactions-evaluator-topic create-decision-topic create-fraud-signals-topics
 
