@@ -4,6 +4,8 @@
 dist/
 build/
 
+**/.env
+
 tmp
 .vscode
 ### Go ###
