@@ -53,7 +53,6 @@ var envVarWithDefaultPattern = regexp.MustCompile(`\$\{[A-Z_]+:-[^}]+\}`)
 // host ports to their expected port mapping pattern using ${VAR:-default} syntax.
 var configurablePortContainers = map[string]string{
 	"grafana":  "${GRAFANA_PORT:-3003}:3000",
-	"cadvisor": "${CADVISOR_PORT:-8081}:8080",
 }
 
 // **Validates: Requirements 8.4**

@@ -55,7 +55,6 @@ func TestProperty_AllObservabilityContainersDefined(t *testing.T) {
 		"tempo",
 		"otel-collector",
 		"prometheus",
-		"cadvisor",
 		"kafka-exporter",
 	}
 
@@ -82,7 +81,6 @@ func TestProperty_AllObservabilityContainersOnLocalNetwork(t *testing.T) {
 		"tempo",
 		"otel-collector",
 		"prometheus",
-		"cadvisor",
 		"kafka-exporter",
 	}
 
